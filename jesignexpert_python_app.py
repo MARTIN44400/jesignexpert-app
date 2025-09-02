@@ -180,37 +180,35 @@ class EcmaApiClient:
         ).hexdigest()
     
     def get_timestamp(self):
-        """Génère un timestamp en temps réel basé sur l'heure du serveur ECMA"""
-        try:
-            # Utiliser l'heure du serveur ECMA comme référence
-            response = requests.get(f"{self.base_url}/swagger-ui.html", timeout=5)
-            if response.ok and 'Date' in response.headers:
-                # Parser l'heure du serveur ECMA depuis les headers HTTP
-                server_date = response.headers['Date']
-                # Format: 'Tue, 02 Sep 2025 21:15:20 GMT'
-                from email.utils import parsedate_to_datetime
-                server_time = parsedate_to_datetime(server_date)
-                timestamp = int(server_time.timestamp() * 1000)
-                logger.info(f"Timestamp basé sur serveur ECMA: {timestamp} ms")
-                logger.info(f"Heure serveur ECMA: {server_date}")
-                return timestamp
-        except Exception as e:
-            logger.warning(f"Impossible d'utiliser l'heure serveur ECMA: {e}")
+        """Obtient un timestamp UTC précis"""
+        for url in ['https://timeapi.io/api/Time/current/zone?timeZone=UTC', 
+                    'http://worldtimeapi.org/api/timezone/UTC']:
+            try:
+                response = requests.get(url, timeout=5)
+                if response.ok:
+                    time_data = response.json()
+                    if 'dateTime' in time_data:  # timeapi.io
+                        external_timestamp = int(datetime.fromisoformat(time_data['dateTime'].replace('Z', '')).timestamp() * 1000)
+                        logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
+                        logger.info(f"Heure externe UTC: {time_data['dateTime']}")
+                        return external_timestamp
+                    elif 'unixtime' in time_data:  # worldtimeapi.org
+                        external_timestamp = int(time_data['unixtime'] * 1000)
+                        logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
+                        logger.info(f"Heure externe UTC: {datetime.utcfromtimestamp(time_data['unixtime']).strftime('%Y-%m-%d %H:%M:%S')}")
+                        return external_timestamp
+            except Exception as e:
+                logger.warning(f"Erreur synchronisation externe ({url}): {e}")
         
-        # Fallback: timestamp actuel avec ajustement
-        import calendar
-        from datetime import timezone
+        # Fallback sur le système, avec vérification
+        system_timestamp = int(time.time() * 1000)
+        system_utc = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        logger.info(f"Timestamp système: {system_timestamp} ms")
+        logger.info(f"Heure système UTC: {system_utc}")
         
-        # Générer timestamp pour "maintenant" en UTC
-        now_utc = datetime.now(timezone.utc)
-        timestamp = int(now_utc.timestamp() * 1000)
-        
-        logger.info(f"Timestamp UTC calculé: {timestamp} ms")
-        logger.info(f"Heure UTC calculée: {now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-        
-        return timestamp
-
-def get_auth_url(self, success_url=None, callback_url=None):
+        return system_timestamp
+    
+    def get_auth_url(self, success_url=None, callback_url=None):
         """Effectue l'authentification et retourne l'URL ComptExpert"""
         # Test de validation HMAC avec l'exemple de la doc
         logger.info("=== TEST DE VALIDATION HMAC ===")
@@ -223,7 +221,7 @@ def get_auth_url(self, success_url=None, callback_url=None):
         
         # Génération des paramètres d'authentification
         id_request = self.generate_id_request()
-        timestamp = self.get_timestamp()
+        timestamp = self.get_timestamp_fixed()  # Utilise la nouvelle méthode
         hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"
         hmac_signature = self.generate_hmac(hmac_data)
         
@@ -309,6 +307,36 @@ def get_auth_url(self, success_url=None, callback_url=None):
             raise Exception("Erreur de connexion à l'API d'authentification")
         except requests.exceptions.RequestException as e:
             raise Exception(f"Erreur réseau: {e}")
+    
+    def get_timestamp_fixed(self):
+        """Génère un timestamp en temps réel basé sur l'heure du serveur ECMA"""
+        try:
+            # Utiliser l'heure du serveur ECMA comme référence
+            response = requests.get(f"{self.base_url}/swagger-ui.html", timeout=5)
+            if response.ok and 'Date' in response.headers:
+                # Parser l'heure du serveur ECMA depuis les headers HTTP
+                server_date = response.headers['Date']
+                # Format: 'Tue, 02 Sep 2025 21:15:20 GMT'
+                from email.utils import parsedate_to_datetime
+                server_time = parsedate_to_datetime(server_date)
+                timestamp = int(server_time.timestamp() * 1000)
+                logger.info(f"Timestamp basé sur serveur ECMA: {timestamp} ms")
+                logger.info(f"Heure serveur ECMA: {server_date}")
+                return timestamp
+        except Exception as e:
+            logger.warning(f"Impossible d'utiliser l'heure serveur ECMA: {e}")
+        
+        # Fallback: timestamp actuel avec ajustement
+        from datetime import timezone
+        
+        # Générer timestamp pour "maintenant" en UTC
+        now_utc = datetime.now(timezone.utc)
+        timestamp = int(now_utc.timestamp() * 1000)
+        
+        logger.info(f"Timestamp UTC calculé: {timestamp} ms")
+        logger.info(f"Heure UTC calculée: {now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        
+        return timestamp
     
     def fetch_tokens(self):
         """Récupère les tokens après callback"""
@@ -706,15 +734,3 @@ if __name__ == '__main__':
     print("=" * 60)
     
     app.run(host=host, port=port, debug=debug)
-
-import time
-from datetime import datetime
-
-# Test dans votre console Python
-current_time = time.time()
-timestamp_ms = int(current_time * 1000)
-readable_time = datetime.fromtimestamp(current_time)
-
-print(f"time.time(): {current_time}")
-print(f"timestamp_ms: {timestamp_ms}")
-print(f"Date lisible: {readable_time}")
