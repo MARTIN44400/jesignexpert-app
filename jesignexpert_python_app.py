@@ -145,26 +145,61 @@ class EcmaApiClient:
         return int(time.time())
     
     def get_auth_url(self, success_url=None, callback_url=None):
-        """Génère l'URL d'authentification pour obtenir les tokens office et user"""
+        """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
         id_request = self.generate_id_request()
         timestamp = self.get_timestamp()
         hmac_data = f"{self.shortcut}{id_request}{timestamp}"
         hmac_signature = self.generate_hmac(hmac_data)
         
+        # URL de l'endpoint ECMA pour POST
         url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/{id_request}/{hmac_signature}?ts={timestamp}"
         
+        # Body JSON comme requis par la doc ECMA
+        payload = {}
         if success_url:
-            url += f"&success_url={success_url}"
+            payload['success_url'] = success_url
         if callback_url:
-            url += f"&callback_url={callback_url}"
+            payload['callback_url'] = callback_url
+        payload['generate_hmac'] = True
         
         # Stocker l'idRequest en session
         session['auth_id_request'] = id_request
         session['auth_timestamp'] = timestamp
         session['auth_hmac'] = hmac_signature
         
-        logger.info(f"🔐 URL d'authentification générée: {url}")
-        return url
+        try:
+            # POST vers ECMA comme requis par la documentation
+            response = requests.post(
+                url, 
+                json=payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            logger.info(f"POST authentification vers ECMA: {response.status_code}")
+            
+            if not response.ok:
+                logger.error(f"Erreur ECMA POST: {response.status_code} - {response.text}")
+                raise Exception(f"Erreur API ECMA: {response.status_code}")
+            
+            # ECMA devrait retourner l'URL d'authentification à utiliser
+            auth_data = response.json()
+            auth_url = auth_data.get('url') or auth_data.get('authUrl') or auth_data.get('redirectUrl')
+            
+            if not auth_url:
+                # Si ECMA ne retourne pas d'URL, construire manuellement
+                logger.warning("ECMA n'a pas retourné d'URL, construction manuelle")
+                auth_url = url
+            
+            logger.info(f"URL d'authentification obtenue: {auth_url}")
+            return auth_url
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erreur réseau vers ECMA: {e}")
+            raise Exception(f"Impossible de contacter ECMA: {e}")
+        except Exception as e:
+            logger.error(f"Erreur lors de l'obtention de l'URL d'auth: {e}")
+            raise
     
     def fetch_tokens(self):
         """Récupère les tokens après authentification"""
