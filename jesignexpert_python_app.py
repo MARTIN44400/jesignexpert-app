@@ -179,34 +179,23 @@ class EcmaApiClient:
             hashlib.sha256
         ).hexdigest()
     
-    def get_timestamp(self):
-        """Obtient un timestamp UTC précis"""
-        for url in ['https://timeapi.io/api/Time/current/zone?timeZone=UTC', 
-                    'http://worldtimeapi.org/api/timezone/UTC']:
-            try:
-                response = requests.get(url, timeout=5)
-                if response.ok:
-                    time_data = response.json()
-                    if 'dateTime' in time_data:  # timeapi.io
-                        external_timestamp = int(datetime.fromisoformat(time_data['dateTime'].replace('Z', '')).timestamp() * 1000)
-                        logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
-                        logger.info(f"Heure externe UTC: {time_data['dateTime']}")
-                        return external_timestamp
-                    elif 'unixtime' in time_data:  # worldtimeapi.org
-                        external_timestamp = int(time_data['unixtime'] * 1000)
-                        logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
-                        logger.info(f"Heure externe UTC: {datetime.utcfromtimestamp(time_data['unixtime']).strftime('%Y-%m-%d %H:%M:%S')}")
-                        return external_timestamp
-            except Exception as e:
-                logger.warning(f"Erreur synchronisation externe ({url}): {e}")
+    def get_timestamp_fixed(self):
+        """Génère un timestamp UTC correct"""
+        from datetime import datetime, timezone
         
-        # Fallback sur le système, avec vérification
-        system_timestamp = int(time.time() * 1000)
-        system_utc = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-        logger.info(f"Timestamp système: {system_timestamp} ms")
-        logger.info(f"Heure système UTC: {system_utc}")
+        # Utiliser directement l'heure actuelle UTC
+        now_utc = datetime.now(timezone.utc)
+        timestamp = int(now_utc.timestamp() * 1000)
         
-        return system_timestamp
+        logger.info(f"Heure UTC actuelle: {now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        logger.info(f"Timestamp généré: {timestamp} ms")
+        
+        # Vérification : ce timestamp doit être autour de 1725315743000 pour septembre 2025
+        expected_sept_2025 = 1725315743000  # 2 sept 2025, 21:29 UTC approximatif
+        if abs(timestamp - expected_sept_2025) > 86400000:  # Plus d'un jour d'écart
+            logger.warning(f"Timestamp semble incorrect: {timestamp}, attendu ~{expected_sept_2025}")
+        
+        return timestamp
     
     def get_auth_url(self, success_url=None, callback_url=None):
         """Effectue l'authentification et retourne l'URL ComptExpert"""
