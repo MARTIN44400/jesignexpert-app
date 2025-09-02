@@ -181,30 +181,16 @@ class EcmaApiClient:
     
     def get_timestamp(self):
         """Obtient un timestamp UTC précis"""
-        for url in ['https://timeapi.io/api/Time/current/zone?timeZone=UTC', 
-                    'http://worldtimeapi.org/api/timezone/UTC']:
-            try:
-                response = requests.get(url, timeout=5)
-                if response.ok:
-                    time_data = response.json()
-                    if 'dateTime' in time_data:  # timeapi.io
-                        external_timestamp = int(datetime.fromisoformat(time_data['dateTime'].replace('Z', '')).timestamp() * 1000)
-                        logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
-                        logger.info(f"Heure externe UTC: {time_data['dateTime']}")
-                        return external_timestamp
-                    elif 'unixtime' in time_data:  # worldtimeapi.org
-                        external_timestamp = int(time_data['unixtime'] * 1000)
-                        logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
-                        logger.info(f"Heure externe UTC: {datetime.utcfromtimestamp(time_data['unixtime']).strftime('%Y-%m-%d %H:%M:%S')}")
-                        return external_timestamp
-            except Exception as e:
-                logger.warning(f"Erreur synchronisation externe ({url}): {e}")
-        
-        # Fallback sur le système, avec vérification
+        # Utilisation directe du timestamp système pour éviter les erreurs de conversion
         system_timestamp = int(time.time() * 1000)
         system_utc = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-        logger.info(f"Timestamp système: {system_timestamp} ms")
+        logger.info(f"Timestamp système direct: {system_timestamp} ms")
         logger.info(f"Heure système UTC: {system_utc}")
+        
+        # Vérification de cohérence
+        expected_timestamp = 1725315843000  # Approximativement pour septembre 2025
+        if abs(system_timestamp - expected_timestamp) > 86400000:  # ±1 jour
+            logger.warning(f"Timestamp potentiellement incorrect: {system_timestamp} ms")
         
         return system_timestamp
     
@@ -704,3 +690,15 @@ if __name__ == '__main__':
     print("=" * 60)
     
     app.run(host=host, port=port, debug=debug)
+
+import time
+from datetime import datetime
+
+# Test dans votre console Python
+current_time = time.time()
+timestamp_ms = int(current_time * 1000)
+readable_time = datetime.fromtimestamp(current_time)
+
+print(f"time.time(): {current_time}")
+print(f"timestamp_ms: {timestamp_ms}")
+print(f"Date lisible: {readable_time}")
