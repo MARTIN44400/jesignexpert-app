@@ -206,36 +206,107 @@ class EcmaApiClient:
         logger.info(f"Timestamp système: {system_timestamp} ms")
         logger.info(f"Heure système UTC: {system_utc}")
         
-        # Vérifier si le timestamp est dans une plage raisonnable
-        expected_timestamp = 1756855020000  # 02/09/2025 22:37 UTC
-        if abs(system_timestamp - expected_timestamp) > 900000:  # ±15 min
-            logger.error(f"Timestamp système incohérent: {system_timestamp} ms, attendu ~{expected_timestamp} ms")
-            raise Exception("Horloge système désynchronisée")
-        
         return system_timestamp
     
-    def get_auth_url(self, success_url):
-        """Génère l'URL d'authentification"""
+    def get_auth_url(self, success_url=None, callback_url=None):
+        """Effectue l'authentification et retourne l'URL ComptExpert"""
+        # Test de validation HMAC avec l'exemple de la doc
+        logger.info("=== TEST DE VALIDATION HMAC ===")
+        if not self.test_hmac_function():
+            raise Exception("ERREUR: Fonction HMAC défectueuse - Test de validation échoué")
+        
+        # Test de connectivité
+        if not self.test_connectivity():
+            raise Exception("ERREUR: Impossible de joindre le serveur ECMA")
+        
+        # Génération des paramètres d'authentification
         id_request = self.generate_id_request()
-        timestamp = str(self.get_timestamp())
+        timestamp = self.get_timestamp()
         hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"
-        hmac_value = self.generate_hmac(hmac_data)
+        hmac_signature = self.generate_hmac(hmac_data)
         
-        url = (
-            f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/"
-            f"{id_request}/{hmac_value}?ts={timestamp}"
-        )
+        # URL de l'endpoint d'authentification
+        auth_url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/{id_request}/{hmac_signature}?ts={timestamp}"
         
-        session['auth_id_request'] = id_request
-        session['auth_timestamp'] = timestamp
-        session['auth_hmac'] = hmac_value
-        
+        # Logs de diagnostic
         logger.info(f"Shortcut: {self.shortcut}")
+        logger.info(f"idRequest: {id_request}")
+        logger.info(f"Timestamp: {timestamp}")
+        logger.info(f"Secret (premiers 10 chars): {self.secret[:10]}...")
         logger.info(f"HMAC data: {hmac_data}")
-        logger.info(f"HMAC: {hmac_value}")
-        logger.info(f"URL auth: {url}")
+        logger.info(f"HMAC: {hmac_signature}")
+        logger.info(f"URL auth: {auth_url}")
         
-        return url
+        try:
+            # Effectuer l'appel POST (CORRECTION PRINCIPALE)
+            logger.info("=== APPEL POST VERS L'API D'AUTHENTIFICATION ===")
+            
+            # Payload pour l'authentification
+            auth_payload = {}
+            if success_url:
+                auth_payload['success_url'] = success_url
+            if callback_url:
+                auth_payload['callback_url'] = callback_url
+            
+            response = requests.post(auth_url, json=auth_payload, timeout=30)
+            
+            logger.info(f"Status code: {response.status_code}")
+            logger.info(f"Headers de réponse: {dict(response.headers)}")
+            logger.info(f"Contenu de réponse: {response.text}")
+            
+            if response.status_code == 404:
+                raise Exception("L'endpoint d'authentification n'existe pas. Vérifiez l'URL et la documentation.")
+            
+            if response.status_code == 400:
+                try:
+                    error_data = response.json()
+                    if "Le hmac est incorrect" in error_data.get('details', ''):
+                        raise Exception("HMAC incorrect - Vérifiez votre secret ECMA et l'heure système")
+                    else:
+                        raise Exception(f"Erreur API: {error_data}")
+                except json.JSONDecodeError:
+                    raise Exception(f"Erreur 400: {response.text}")
+            
+            if response.status_code == 403:
+                raise Exception("Accès refusé - Vérifiez vos credentials ECMA")
+            
+            if not response.ok:
+                raise Exception(f"Erreur HTTP {response.status_code}: {response.text}")
+            
+            # Traiter la réponse JSON
+            try:
+                auth_data = response.json()
+            except json.JSONDecodeError:
+                raise Exception("Réponse non-JSON reçue de l'API d'authentification")
+            
+            # L'API devrait retourner une URL vers ComptExpert
+            if 'url' in auth_data:
+                comptexpert_url = auth_data['url']
+                logger.info(f"URL ComptExpert reçue: {comptexpert_url}")
+                
+                # Stocker les informations d'authentification en session
+                session['auth_id_request'] = id_request
+                session['auth_timestamp'] = str(timestamp)
+                session['auth_hmac'] = hmac_signature
+                session['success_url'] = success_url
+                
+                return comptexpert_url
+            else:
+                # Si pas d'URL, peut-être que les tokens sont directement dans la réponse
+                logger.info("Pas d'URL dans la réponse, vérification des tokens...")
+                if 'office' in auth_data and 'user' in auth_data:
+                    # Tokens reçus directement
+                    logger.info("Tokens reçus directement dans la réponse")
+                    return auth_data
+                else:
+                    raise Exception(f"Réponse inattendue de l'API: {auth_data}")
+                    
+        except requests.exceptions.Timeout:
+            raise Exception("Timeout lors de l'appel à l'API d'authentification")
+        except requests.exceptions.ConnectionError:
+            raise Exception("Erreur de connexion à l'API d'authentification")
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Erreur réseau: {e}")
     
     def fetch_tokens(self):
         """Récupère les tokens après callback"""
@@ -316,7 +387,7 @@ def initialize_app():
             ECMA_CONFIG['shortcut'],
             ECMA_CONFIG['secret']
         )
-        logger.info("🚀 Client ECMA initialisé")
+        logger.info("Client ECMA initialisé")
 
 # Initialiser au démarrage
 with app.app_context():
@@ -327,14 +398,14 @@ with app.app_context():
 def init_db():
     """Initialise la base de données"""
     db.create_all()
-    print("✅ Base de données initialisée")
+    print("Base de données initialisée")
 
 @app.cli.command()
 def reset_db():
     """Remet à zéro la base de données"""
     db.drop_all()
     db.create_all()
-    print("✅ Base de données réinitialisée")
+    print("Base de données réinitialisée")
 
 # Routes
 @app.route('/', methods=['GET', 'POST'])
@@ -367,7 +438,7 @@ def configure():
         secret
     )
     
-    logger.info("🔧 Configuration ECMA mise à jour")
+    logger.info("Configuration ECMA mise à jour")
     flash('Configuration ECMA mise à jour avec succès', 'success')
     return redirect(url_for('index'))
 
@@ -386,13 +457,24 @@ def authenticate():
         
         success_url = f"{callback_base}{url_for('auth_callback')}"
         
-        auth_url = ecma_client.get_auth_url(success_url=success_url)
+        # CORRECTION: get_auth_url fait maintenant l'appel POST et retourne l'URL ComptExpert
+        result = ecma_client.get_auth_url(success_url=success_url)
         
-        logger.info(f"🔀 Redirection vers: {auth_url}")
-        return redirect(auth_url)
+        if isinstance(result, dict) and 'office' in result:
+            # Tokens reçus directement, pas besoin de redirection
+            session['tokens'] = result
+            office_name = result.get('office', {}).get('name', 'Cabinet inconnu')
+            flash(f'Authentification directe réussie ! Cabinet: {office_name}', 'success')
+            return redirect(url_for('index'))
+        elif isinstance(result, str):
+            # URL ComptExpert reçue, rediriger l'utilisateur
+            logger.info(f"Redirection vers ComptExpert: {result}")
+            return redirect(result)
+        else:
+            raise Exception(f"Réponse inattendue: {result}")
         
     except Exception as e:
-        logger.error(f"⚠ Erreur authentification: {e}")
+        logger.error(f"Erreur authentification: {e}")
         flash(f'Erreur d\'authentification: {e}', 'error')
         return redirect(url_for('index'))
 
@@ -423,7 +505,7 @@ def auth_callback():
         return redirect(url_for('index'))
         
     except Exception as e:
-        logger.error(f"❌ Erreur récupération tokens: {e}")
+        logger.error(f"Erreur récupération tokens: {e}")
         flash(f'Erreur lors de l\'authentification: {e}', 'error')
         
         for key in ['auth_id_request', 'auth_timestamp', 'auth_hmac']:
