@@ -49,7 +49,7 @@ migrate = Migrate(app, db)
 ECMA_CONFIG = {
     'base_url': os.getenv('ECMA_BASE_URL', 'https://ecma-preprod.reeliant.net'),
     'shortcut': os.getenv('ECMA_SHORTCUT', 'es_mUVuCdFh'),
-    'secret': os.getenv('ECMA_SECRET', ''),
+    'secret': os.getenv('ECMA_SECRET', 'XCiUyWGHZCXA5tqAVE0IPI-EUMF7UI0zE'),
     'environment': os.getenv('ECMA_ENVIRONMENT', 'preprod')
 }
 
