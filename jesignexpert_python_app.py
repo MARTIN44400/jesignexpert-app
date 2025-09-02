@@ -282,14 +282,14 @@ class EcmaApiClient:
             raise Exception(f"Erreur réseau: {e}")
         
     def get_timestamp_fixed(self):
-            """Force un timestamp pour 02/09/2025 21:55 UTC pour test"""
-            # Timestamp calculé pour 02/09/2025 21:55:00 UTC
-            fixed_timestamp = 1725318900000
-            
-            logger.info(f"Timestamp forcé: {fixed_timestamp} ms")
-            logger.info(f"Date correspondante: 02/09/2025 21:55:00 UTC")
-            
-            return fixed_timestamp
+        """Force un timestamp pour 02/09/2025 21:58:00 UTC (23:58 heure française)"""
+        # Timestamp calculé pour 02/09/2025 21:58:00 UTC
+        fixed_timestamp = 1725319080000
+        
+        logger.info(f"Timestamp forcé: {fixed_timestamp} ms")
+        logger.info(f"Date correspondante: 02/09/2025 21:58:00 UTC (23:58:00 CET)")
+        
+        return fixed_timestamp
 
     def fetch_tokens(self):
         """Récupère les tokens après callback"""
