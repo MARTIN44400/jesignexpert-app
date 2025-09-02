@@ -258,7 +258,7 @@ def reset_db():
     print("✅ Base de données réinitialisée")
 
 # Routes
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def index():
     """Page d'accueil"""
     global ecma_client
@@ -300,7 +300,12 @@ def authenticate():
         return redirect(url_for('index'))
     
     try:
-        callback_base = os.getenv('CALLBACK_BASE_URL', request.host_url.rstrip('/'))
+        # Forcer HTTPS pour les callbacks en production
+        if os.getenv('FLASK_ENV') == 'production':
+            callback_base = f"https://{request.host}"
+        else:
+            callback_base = os.getenv('CALLBACK_BASE_URL', request.host_url.rstrip('/'))
+        
         success_url = f"{callback_base}{url_for('auth_callback')}"
         
         auth_url = ecma_client.get_auth_url(success_url=success_url)
