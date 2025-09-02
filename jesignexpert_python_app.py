@@ -164,66 +164,42 @@ class EcmaApiClient:
                 logger.error(f"Erreur synchronisation externe: {e}")
                 return int(time.time() * 1000)  # Dernier recours
     
-    def get_auth_url(self, success_url=None, callback_url=None):
-        """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
-        id_request = self.generate_id_request()
-        timestamp = self.get_timestamp()
-        hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"
-        logger.info(f"HMAC data: {hmac_data}")  # Ajout pour débogage
-        logger.debug(f"Secret utilisé: {'*' * len(self.secret)} (longueur: {len(self.secret)})")  # Log masqué pour sécurité
-        hmac_signature = self.generate_hmac(hmac_data)
+    def get_auth_url(self, payload):
+        """
+        Construit l’URL d’authentification ECMA avec le bon idRequest
+        """
+        # 1. On crée un dépôt pour obtenir l’idRequest depuis Jesignexpert
+        id_request = self.create_depot(payload)
+
+        # 2. Génération du timestamp (en millisecondes)
+        timestamp = str(int(time.time() * 1000))
+
+        # 3. Construction de la chaîne à signer
+        data = f"{self.shortcut}||{id_request}||{timestamp}"
+        logger.info(f"HMAC data: {data}")
+
+        # 4. Génération du HMAC
+        hmac_signature = self.generate_hmac(data)
         logger.info(f"HMAC généré: {hmac_signature}")
-        
-        # URL de l'endpoint ECMA pour POST
-        url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/{id_request}/{hmac_signature}?ts={timestamp}"
+
+        # 5. Construction de l’URL POST d’authentification
+        url = (
+            f"{self.base_url}/{self.shortcut}/token/officeAndUser/auth/"
+            f"{id_request}/{hmac_signature}?ts={timestamp}"
+        )
         logger.info(f"URL POST: {url}")
+
+        # 6. Appel vers ECMA
+        response = requests.post(url)
+        logger.info(f"POST authentification vers ECMA: {response.status_code}")
+
+        if response.status_code != 200:
+            logger.error(f"Erreur ECMA POST: {response.status_code} - {response.text}")
+            raise Exception(f"Erreur API ECMA: {response.status_code}")
+
+        return response.json()
+
         
-        # Body JSON comme requis par la doc ECMA
-        payload = {}
-        if success_url:
-            payload['success_url'] = success_url
-        if callback_url:
-            payload['callback_url'] = callback_url
-        payload['generate_hmac'] = True
-        
-        # Stocker l'idRequest en session
-        session['auth_id_request'] = id_request
-        session['auth_timestamp'] = timestamp
-        session['auth_hmac'] = hmac_signature
-        
-        try:
-            # POST vers ECMA comme requis par la documentation
-            response = requests.post(
-                url, 
-                json=payload,
-                headers={'Content-Type': 'application/json'},
-                timeout=30
-            )
-            
-            logger.info(f"POST authentification vers ECMA: {response.status_code}")
-            
-            if not response.ok:
-                logger.error(f"Erreur ECMA POST: {response.status_code} - {response.text}")
-                raise Exception(f"Erreur API ECMA: {response.status_code}")
-            
-            # ECMA devrait retourner l'URL d'authentification à utiliser
-            auth_data = response.json()
-            auth_url = auth_data.get('url') or auth_data.get('authUrl') or auth_data.get('redirectUrl')
-            
-            if not auth_url:
-                logger.warning("ECMA n'a pas retourné d'URL, construction manuelle")
-                auth_url = url
-            
-            logger.info(f"URL d'authentification obtenue: {auth_url}")
-            return auth_url
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Erreur réseau vers ECMA: {e}")
-            raise Exception(f"Impossible de contacter ECMA: {e}")
-        except Exception as e:
-            logger.error(f"Erreur lors de l'obtention de l'URL d'auth: {e}")
-            raise
-    
     def fetch_tokens(self):
         """Récupère les tokens après authentification"""
         if not all(k in session for k in ['auth_id_request', 'auth_timestamp', 'auth_hmac']):
@@ -250,6 +226,24 @@ class EcmaApiClient:
             
         except requests.exceptions.RequestException as e:
             raise Exception(f"Erreur de connexion à ECMA: {e}")
+
+    def create_depot(self, payload):
+        """
+        Crée un dépôt et récupère le idRequest renvoyé par Jesignexpert.
+        """
+        url = f"{self.base_url}/{self.shortcut}/depot"
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        data = response.json()
+
+        id_request = data.get("idRequest")
+        if not id_request:
+            raise ValueError("La réponse Jesignexpert ne contient pas de idRequest")
+
+        logger.info(f"[Jesignexpert] idRequest reçu: {id_request}")
+        return id_request
+
+            
     
     def make_api_call(self, endpoint, method='GET', data=None, files=None):
         """Effectue un appel API avec les tokens stockés en session"""
