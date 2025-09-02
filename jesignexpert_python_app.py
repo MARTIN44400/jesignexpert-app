@@ -168,11 +168,15 @@ class EcmaApiClient:
         """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
         id_request = self.generate_id_request()
         timestamp = self.get_timestamp()
-        hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"  # Ajout des séparateurs ||
+        hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"
+        logger.info(f"HMAC data: {hmac_data}")  # Ajout pour débogage
+        logger.debug(f"Secret utilisé: {'*' * len(self.secret)} (longueur: {len(self.secret)})")  # Log masqué pour sécurité
         hmac_signature = self.generate_hmac(hmac_data)
+        logger.info(f"HMAC généré: {hmac_signature}")
         
         # URL de l'endpoint ECMA pour POST
         url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/{id_request}/{hmac_signature}?ts={timestamp}"
+        logger.info(f"URL POST: {url}")
         
         # Body JSON comme requis par la doc ECMA
         payload = {}
@@ -207,7 +211,6 @@ class EcmaApiClient:
             auth_url = auth_data.get('url') or auth_data.get('authUrl') or auth_data.get('redirectUrl')
             
             if not auth_url:
-                # Si ECMA ne retourne pas d'URL, construire manuellement
                 logger.warning("ECMA n'a pas retourné d'URL, construction manuelle")
                 auth_url = url
             
@@ -220,7 +223,6 @@ class EcmaApiClient:
         except Exception as e:
             logger.error(f"Erreur lors de l'obtention de l'URL d'auth: {e}")
             raise
-
     
     def fetch_tokens(self):
         """Récupère les tokens après authentification"""
