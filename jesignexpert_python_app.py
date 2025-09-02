@@ -164,7 +164,7 @@ class EcmaApiClient:
                 logger.error(f"Erreur synchronisation externe: {e}")
                 return int(time.time() * 1000)  # Dernier recours
     
-    def get_auth_url(self, payload):
+    def get_auth_url(self, payload, success_url):
         """
         Construit l’URL d’authentification ECMA avec le bon idRequest
         """
