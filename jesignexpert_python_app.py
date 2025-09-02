@@ -366,7 +366,7 @@ def authenticate():
         success_url = f"{callback_base}{url_for('auth_callback')}"
         
         # Passez le payload à get_auth_url
-        auth_url = ecma_client.get_auth_url(payload)
+        auth_url = ecma_client.get_auth_url(payload, success_url)
         
         logger.info(f"🔀 Redirection vers: {auth_url}")
         return redirect(auth_url)
