@@ -21,6 +21,8 @@ from datetime import datetime, timedelta
 import logging
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 # Charger les variables d'environnement
 load_dotenv()
 
@@ -179,138 +181,42 @@ class EcmaApiClient:
             hashlib.sha256
         ).hexdigest()
         
-    def get_timestamp(self):
-        """Retourne le timestamp Unix actuel en millisecondes, avec synchronisation si nécessaire"""
-        try:
-            # Timestamp système en millisecondes
-            system_timestamp = int(time.time() * 1000)
-            logger.info(f"Timestamp système OK: {system_timestamp} ms")
-            
-            # Vérification que le timestamp est cohérent (proche de septembre 2025)
-            # Timestamp attendu pour septembre 2025: environ 1725292800000
-            expected_min = 1720000000000  # Juillet 2024
-            expected_max = 1800000000000  # Novembre 2026
-            
-            if not (expected_min <= system_timestamp <= expected_max):
-                logger.warning(f"Timestamp suspect: {system_timestamp}, tentative de synchronisation externe")
-                raise Exception("Timestamp système incohérent")
-            
-            return system_timestamp
-            
-        except Exception as e:
-            logger.error(f"Erreur lors de l'obtention du timestamp système: {e}")
-            # Fallback : essayer une API externe
-            try:
-                response = requests.get('http://worldtimeapi.org/api/timezone/UTC', timeout=5)
-                if response.ok:
-                    time_data = response.json()
-                    external_timestamp = int(time_data['unixtime'] * 1000)  # Convertir en ms
-                    logger.info(f"Timestamp externe obtenu: {external_timestamp} ms")
-                    return external_timestamp
-                else:
-                    logger.error("Impossible d'obtenir l'heure externe, fallback système")
-                    return int(time.time() * 1000)
-            except Exception as e:
-                logger.error(f"Erreur synchronisation externe: {e}")
-                return int(time.time() * 1000)  # Dernier recours
-    
-    def get_auth_url(self, success_url=None, callback_url=None):
-        """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
-        
-        # Test de validation HMAC avec l'exemple de la doc
-        logger.info("=== TEST DE VALIDATION HMAC ===")
-        if not self.test_hmac_function():
-            raise Exception("ERREUR: Fonction HMAC défectueuse - Test de validation échoué")
-        logger.info("✅ Test HMAC réussi - Fonction correcte")
-        logger.info("=== FIN TEST HMAC ===")
-        
-        # Test de connectivité de base
-        if not self.test_connectivity():
-            logger.warning("⚠️ Problème de connectivité détecté avec l'URL de base")
-        
-        # Génération des paramètres
-        id_request = self.generate_id_request()
-        timestamp = self.get_timestamp()
-        hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"
-        
-        # Logs détaillés pour diagnostic
-        logger.info("=== PARAMÈTRES D'AUTHENTIFICATION ===")
-        logger.info(f"Base URL: {self.base_url}")
-        logger.info(f"Shortcut: {self.shortcut}")
-        logger.info(f"Secret: {self.secret[:5]}{'*' * (len(self.secret)-5)}")  # Partiellement masqué
-        logger.info(f"ID Request: {id_request}")
-        logger.info(f"Timestamp: {timestamp}")
-        logger.info(f"HMAC data: {hmac_data}")
-        
-        hmac_signature = self.generate_hmac(hmac_data)
-        logger.info(f"HMAC généré: {hmac_signature}")
-        
-        # URL de l'endpoint ECMA pour POST
-        url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/{id_request}/{hmac_signature}?ts={timestamp}"
-        logger.info(f"URL POST: {url}")
-        
-        # Body JSON comme requis par la doc ECMA
-        payload = {}
-        if success_url:
-            payload['success_url'] = success_url
-        if callback_url:
-            payload['callback_url'] = callback_url
-        payload['generate_hmac'] = True
-        
-        logger.info(f"Payload: {json.dumps(payload, indent=2)}")
-        
-        # Stocker l'idRequest en session
-        session['auth_id_request'] = id_request
-        session['auth_timestamp'] = timestamp
-        session['auth_hmac'] = hmac_signature
-        
-        try:
-            # POST vers ECMA comme requis par la documentation
-            logger.info("=== APPEL API ECMA ===")
-            response = requests.post(
-                url, 
-                json=payload,
-                headers={'Content-Type': 'application/json'},
-                timeout=30
-            )
-            
-            logger.info(f"Status code: {response.status_code}")
-            logger.info(f"Response headers: {dict(response.headers)}")
-            logger.info(f"Response content: {response.text[:500]}")
-            
-            if response.status_code == 400:
-                logger.error("ERREUR 400 - Vérifiez:")
-                logger.error("1. Que votre shortcut est correct")
-                logger.error("2. Que votre secret est correct (pas d'espaces)")
-                logger.error("3. Que le timestamp est dans la fenêtre ±5 minutes")
-                raise Exception(f"Erreur 400 HMAC incorrect: {response.text}")
-            
-            if response.status_code == 404:
-                logger.error("ERREUR 404 - URL ou endpoint incorrect")
-                logger.error("Vérifiez que l'URL de base est correcte")
-                raise Exception(f"Erreur 404 Not Found: {response.text}")
-            
-            if not response.ok:
-                logger.error(f"Erreur ECMA: {response.status_code} - {response.text}")
-                raise Exception(f"Erreur API ECMA: {response.status_code} - {response.text}")
-            
-            # ECMA devrait retourner l'URL d'authentification à utiliser
-            auth_data = response.json()
-            auth_url = auth_data.get('url') or auth_data.get('authUrl') or auth_data.get('redirectUrl')
-            
-            if not auth_url:
-                logger.warning("ECMA n'a pas retourné d'URL, construction manuelle")
-                auth_url = url
-            
-            logger.info(f"✅ URL d'authentification obtenue: {auth_url}")
-            return auth_url
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Erreur réseau vers ECMA: {e}")
-            raise Exception(f"Impossible de contacter ECMA: {e}")
-        except Exception as e:
-            logger.error(f"Erreur lors de l'obtention de l'URL d'auth: {e}")
-            raise
+
+
+     def get_timestamp(self):
+         # Essayer plusieurs sources externes pour garantir un timestamp UTC précis
+         for url in ['https://timeapi.io/api/Time/current/zone?timeZone=UTC', 
+                    'http://worldtimeapi.org/api/timezone/UTC']:
+             try:
+                 response = requests.get(url, timeout=5)
+                 if response.ok:
+                     time_data = response.json()
+                     if 'dateTime' in time_data:  # timeapi.io
+                         external_timestamp = int(datetime.fromisoformat(time_data['dateTime'].replace('Z', '')).timestamp() * 1000)
+                         logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
+                         logger.info(f"Heure externe UTC: {time_data['dateTime']}")
+                         return external_timestamp
+                     elif 'unixtime' in time_data:  # worldtimeapi.org
+                         external_timestamp = int(time_data['unixtime'] * 1000)
+                         logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
+                         logger.info(f"Heure externe UTC: {datetime.utcfromtimestamp(time_data['unixtime']).strftime('%Y-%m-%d %H:%M:%S')}")
+                         return external_timestamp
+             except Exception as e:
+                 logger.warning(f"Erreur synchronisation externe ({url}): {e}")
+         
+         # Fallback sur le système, avec vérification
+         system_timestamp = int(time.time() * 1000)
+         system_utc = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+         logger.info(f"Timestamp système: {system_timestamp} ms")
+         logger.info(f"Heure système UTC: {system_utc}")
+         
+         # Vérifier si le timestamp est dans une plage raisonnable
+         expected_timestamp = 1756848000000  # 02/09/2025 20:00 UTC
+         if abs(system_timestamp - expected_timestamp) > 900000:  # ±15 min
+             logger.error(f"Timestamp système incohérent: {system_timestamp} ms, attendu ~{expected_timestamp} ms")
+             raise Exception("Horloge système désynchronisée")
+         
+         return system_timestamp
     
     def fetch_tokens(self):
         """Récupère les tokens après authentification"""
