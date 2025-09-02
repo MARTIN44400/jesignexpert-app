@@ -352,6 +352,11 @@ def authenticate():
         return redirect(url_for('index'))
     
     try:
+        # Construire le payload nécessaire pour l'authentification
+        payload = {
+            # Ajoutez les champs requis ici
+        }
+
         # Forcer HTTPS pour les callbacks en production
         if os.getenv('FLASK_ENV') == 'production':
             callback_base = f"https://{request.host}"
@@ -360,7 +365,8 @@ def authenticate():
         
         success_url = f"{callback_base}{url_for('auth_callback')}"
         
-        auth_url = ecma_client.get_auth_url(success_url=success_url)
+        # Passez le payload à get_auth_url
+        auth_url = ecma_client.get_auth_url(payload)
         
         logger.info(f"🔀 Redirection vers: {auth_url}")
         return redirect(auth_url)
@@ -369,7 +375,7 @@ def authenticate():
         logger.error(f"❌ Erreur authentification: {e}")
         flash(f'Erreur d\'authentification: {e}', 'error')
         return redirect(url_for('index'))
-
+    
 @app.route('/auth/callback')
 def auth_callback():
     """Callback après authentification ComptExpert"""
