@@ -141,8 +141,14 @@ class EcmaApiClient:
         ).hexdigest()
     
     def get_timestamp(self):
-        """Retourne le timestamp Unix actuel"""
-        return int(time.time())
+        """Retourne le timestamp Unix actuel en secondes, avec vérification du décalage"""
+        current_timestamp = int(time.time())
+        
+        # Log pour debug du timestamp
+        current_time_readable = datetime.fromtimestamp(current_timestamp).strftime('%Y-%m-%d %H:%M:%S UTC')
+        logger.info(f"Timestamp généré: {current_timestamp} ({current_time_readable})")
+        
+        return current_timestamp
     
     def get_auth_url(self, success_url=None, callback_url=None):
         """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
