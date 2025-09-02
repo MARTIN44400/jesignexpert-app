@@ -141,14 +141,39 @@ class EcmaApiClient:
         ).hexdigest()
     
     def get_timestamp(self):
-        """Retourne le timestamp Unix actuel en secondes, avec vérification du décalage"""
-        current_timestamp = int(time.time())
-        
-        # Log pour debug du timestamp
-        current_time_readable = datetime.fromtimestamp(current_timestamp).strftime('%Y-%m-%d %H:%M:%S UTC')
-        logger.info(f"Timestamp généré: {current_timestamp} ({current_time_readable})")
-        
-        return current_timestamp
+        """Retourne le timestamp Unix actuel, avec synchronisation via API externe si nécessaire"""
+        try:
+            # Essayer d'abord le timestamp système normal
+            system_timestamp = int(time.time())
+            
+            # Vérifier si le timestamp système semble correct (pas trop dans le futur)
+            # Un timestamp de 2024 devrait commencer par 17... 
+            # Un timestamp de 2025 commencerait par 17...
+            current_year = 2024
+            expected_timestamp_range = (1704067200, 1735689600)  # 2024-2025 range
+            
+            if expected_timestamp_range[0] <= system_timestamp <= expected_timestamp_range[1]:
+                logger.info(f"Timestamp système OK: {system_timestamp}")
+                return system_timestamp
+            else:
+                logger.warning(f"Timestamp système suspect: {system_timestamp}, tentative de synchronisation")
+                
+                # Utiliser une API de temps externe
+                import requests
+                response = requests.get('http://worldtimeapi.org/api/timezone/UTC', timeout=5)
+                if response.ok:
+                    time_data = response.json()
+                    external_timestamp = int(time_data['unixtime'])
+                    logger.info(f"Timestamp externe obtenu: {external_timestamp}")
+                    return external_timestamp
+                else:
+                    logger.error("Impossible d'obtenir l'heure externe, utilisation du système")
+                    return system_timestamp
+                    
+        except Exception as e:
+            logger.error(f"Erreur lors de l'obtention du timestamp: {e}")
+            # Fallback sur timestamp système
+            return int(time.time())
     
     def get_auth_url(self, success_url=None, callback_url=None):
         """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
