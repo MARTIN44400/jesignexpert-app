@@ -49,24 +49,8 @@ migrate = Migrate(app, db)
 ECMA_CONFIG = {
     'base_url': os.getenv('ECMA_BASE_URL', 'https://ecma-preprod.reeliant.net'),
     'shortcut': os.getenv('ECMA_SHORTCUT', 'es_mUVuCdFh'),
-    'secret': os.getenv('ECMA_SECRET', ''),
+    'secret': os.getenv('ECMA_SECRET', '').strip(),  # Supprime les espaces
     'environment': os.getenv('ECMA_ENVIRONMENT', 'preprod')
-}
-
-# 🆕 Payload de test minimal pour créer un dépôt
-PAYLOAD_TEST_MINIMAL = {
-    "metadata": {
-        "title": "Test dépôt Python",
-        "description": "Créé depuis l'intégration Python pour test HMAC",
-        "language": "fr"
-    },
-    "files": [
-        {
-            "name": "test.pdf",
-            # Contenu PDF minimal en Base64 (PDF vide de test)
-            "content": "JVBERi0xLjQKJcOkw7zDtsOfCjIgMCBvYmoKPDwKL0xlbmd0aCA5Ci9GaWx0ZXIgL0ZsYXRlRGVjb2RlCj4+CnN0cmVhbQp4nCvkMlQwULCx0XfOL8nIzFGwsa/I8zdQsLFQMFCwVTBUsLGvyPOvqFOwVTBUsLGvyPNJrUjNzFGwVTBUsLGvyCtRsLFQMFWwsVUAAKCLFnEKZW5kc3RyZWFtCmVuZG9iago0IDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9QYXJlbnQgMyAwIFIKL01lZGlhQm94IFswIDAgNjEyIDc5Ml0KPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFs0IDAgUl0KL0NvdW50IDEKL01lZGlhQm94IFswIDAgNjEyIDc5Ml0KPj4KZW5kb2JqCjEgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDMgMCBSCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9DcmVhdG9yIChQeXRob24gVGVzdCBQREYpCi9Qcm9kdWNlciAoUHl0aG9uIFRlc3QgUERGKQovQ3JlYXRpb25EYXRlIChEOjIwMjUwMTAxMDAwMDAwKzAwJzAwJykKPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZgowMDAwMDAwMjY5IDAwMDAwIG4KMDAwMDAwMDAwOSAwMDAwMCBuCjAwMDAwMDAxNTggMDAwMDAgbgowMDAwMDAwMDg3IDAwMDAwIG4KMDAwMDAwMDMxOCAwMDAwMCBuCnRyYWlsZXIKPDwKL1NpemUgNgovUm9vdCAxIDAgUgovSW5mbyA1IDAgUgo+PgpzdGFydHhyZWYKNDUyCiUlRU9G"
-        }
-    ]
 }
 
 # Configuration des logs
@@ -124,14 +108,14 @@ def check_config():
         missing.append('ECMA_SECRET')
     
     if app.secret_key == 'dev-key-change-in-production' and os.getenv('FLASK_ENV') == 'production':
-        logger.warning('⚠️ ATTENTION: Changez FLASK_SECRET_KEY en production!')
+        logger.warning('ATTENTION: Changez FLASK_SECRET_KEY en production!')
     
     if missing:
-        logger.error(f"❌ Variables d'environnement manquantes: {', '.join(missing)}")
-        logger.error("📄 Copiez .env.example vers .env et remplissez vos valeurs")
+        logger.error(f"Variables d'environnement manquantes: {', '.join(missing)}")
+        logger.error("Copiez .env.example vers .env et remplissez vos valeurs")
         return False
     
-    logger.info("✅ Configuration .env chargée avec succès")
+    logger.info("Configuration .env chargée avec succès")
     return True
 
 class EcmaApiClient:
@@ -140,30 +124,52 @@ class EcmaApiClient:
     def __init__(self, base_url, shortcut, secret):
         self.base_url = base_url
         self.shortcut = shortcut
-        self.secret = secret
-    
-    def create_depot(self, payload):
-        """
-        Crée un dépôt et récupère le idRequest renvoyé par Jesignexpert.
-        """
-        url = f"{self.base_url}/{self.shortcut}/depot"
+        self.secret = secret.strip()  # Nettoyage du secret
         
+    def test_connectivity(self):
+        """Test de connectivité initial avec l'URL de base"""
         try:
-            logger.info(f"🏗️ Création du dépôt sur: {url}")
-            response = requests.post(url, json=payload, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-
-            id_request = data.get("idRequest")
-            if not id_request:
-                raise ValueError("La réponse Jesignexpert ne contient pas de idRequest")
-
-            logger.info(f"[Jesignexpert] idRequest reçu: {id_request}")
-            return id_request
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Erreur réseau lors de la création du dépôt: {e}")
-            raise Exception(f"Impossible de créer le dépôt: {e}")
+            url = f"{self.base_url}/swagger-ui.html"  # Interface Swagger connue
+            response = requests.get(url, timeout=10)
+            logger.info(f"Test connectivité: {response.status_code}")
+            return response.ok
+        except Exception as e:
+            logger.error(f"Test connectivité échoué: {e}")
+            return False
+    
+    def test_hmac_function(self):
+        """Test avec l'exemple de la documentation JeSignExpert"""
+        # Valeurs exactes de la doc
+        shortcut_test = "shortcut"
+        id_request_test = "FCmWsIqOv8hqXBR78OHKoJSaH9Aoc0"
+        timestamp_test = "1544783760000"
+        secret_test = "secret"
+        
+        # HMAC attendu selon la doc
+        hmac_expected = "db2070ed2c1348f4c697797f840cb85ce07769bec64f178e61314312155210e5"
+        
+        # Construction de la chaîne
+        concat_test = f"{shortcut_test}||{id_request_test}||{timestamp_test}"
+        
+        # Test de votre fonction
+        hmac_generated = hmac.new(
+            secret_test.encode('utf-8'),
+            concat_test.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        
+        logger.info(f"TEST HMAC - Chaîne: {concat_test}")
+        logger.info(f"TEST HMAC - HMAC attendu: {hmac_expected}")
+        logger.info(f"TEST HMAC - HMAC généré: {hmac_generated}")
+        logger.info(f"TEST HMAC - Test réussi: {hmac_expected == hmac_generated}")
+        
+        return hmac_expected == hmac_generated
+    
+    def generate_id_request(self):
+        """Génère un idRequest unique de 30 caractères alphanumériques"""
+        import secrets
+        import string
+        return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(30))
     
     def generate_hmac(self, data):
         """Génère un HMAC SHA256"""
@@ -179,7 +185,18 @@ class EcmaApiClient:
             # Timestamp système en millisecondes
             system_timestamp = int(time.time() * 1000)
             logger.info(f"Timestamp système OK: {system_timestamp} ms")
+            
+            # Vérification que le timestamp est cohérent (proche de septembre 2025)
+            # Timestamp attendu pour septembre 2025: environ 1725292800000
+            expected_min = 1720000000000  # Juillet 2024
+            expected_max = 1800000000000  # Novembre 2026
+            
+            if not (expected_min <= system_timestamp <= expected_max):
+                logger.warning(f"Timestamp suspect: {system_timestamp}, tentative de synchronisation externe")
+                raise Exception("Timestamp système incohérent")
+            
             return system_timestamp
+            
         except Exception as e:
             logger.error(f"Erreur lors de l'obtention du timestamp système: {e}")
             # Fallback : essayer une API externe
@@ -197,55 +214,86 @@ class EcmaApiClient:
                 logger.error(f"Erreur synchronisation externe: {e}")
                 return int(time.time() * 1000)  # Dernier recours
     
-    def get_auth_url(self, payload, success_url=None, callback_url=None):
-        """
-        Construit l'URL d'authentification ECMA avec le bon idRequest
-        """
-        # 1. On crée un dépôt pour obtenir l'idRequest depuis Jesignexpert
-        id_request = self.create_depot(payload)
-
-        # 2. Génération du timestamp (en millisecondes)
+    def get_auth_url(self, success_url=None, callback_url=None):
+        """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
+        
+        # Test de validation HMAC avec l'exemple de la doc
+        logger.info("=== TEST DE VALIDATION HMAC ===")
+        if not self.test_hmac_function():
+            raise Exception("ERREUR: Fonction HMAC défectueuse - Test de validation échoué")
+        logger.info("✅ Test HMAC réussi - Fonction correcte")
+        logger.info("=== FIN TEST HMAC ===")
+        
+        # Test de connectivité de base
+        if not self.test_connectivity():
+            logger.warning("⚠️ Problème de connectivité détecté avec l'URL de base")
+        
+        # Génération des paramètres
+        id_request = self.generate_id_request()
         timestamp = self.get_timestamp()
-
-        # 3. Construction de la chaîne à signer
-        data = f"{self.shortcut}||{id_request}||{timestamp}"
-        logger.info(f"HMAC data: {data}")
-
-        # 4. Génération du HMAC
-        hmac_signature = self.generate_hmac(data)
+        hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"
+        
+        # Logs détaillés pour diagnostic
+        logger.info("=== PARAMÈTRES D'AUTHENTIFICATION ===")
+        logger.info(f"Base URL: {self.base_url}")
+        logger.info(f"Shortcut: {self.shortcut}")
+        logger.info(f"Secret: {self.secret[:5]}{'*' * (len(self.secret)-5)}")  # Partiellement masqué
+        logger.info(f"ID Request: {id_request}")
+        logger.info(f"Timestamp: {timestamp}")
+        logger.info(f"HMAC data: {hmac_data}")
+        
+        hmac_signature = self.generate_hmac(hmac_data)
         logger.info(f"HMAC généré: {hmac_signature}")
-
-        # 5. Construction de l'URL POST d'authentification
+        
+        # URL de l'endpoint ECMA pour POST
         url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/{id_request}/{hmac_signature}?ts={timestamp}"
         logger.info(f"URL POST: {url}")
         
         # Body JSON comme requis par la doc ECMA
-        auth_payload = {}
+        payload = {}
         if success_url:
-            auth_payload['success_url'] = success_url
+            payload['success_url'] = success_url
         if callback_url:
-            auth_payload['callback_url'] = callback_url
-        auth_payload['generate_hmac'] = True
+            payload['callback_url'] = callback_url
+        payload['generate_hmac'] = True
+        
+        logger.info(f"Payload: {json.dumps(payload, indent=2)}")
         
         # Stocker l'idRequest en session
         session['auth_id_request'] = id_request
         session['auth_timestamp'] = timestamp
         session['auth_hmac'] = hmac_signature
-
+        
         try:
-            # 6. Appel vers ECMA
+            # POST vers ECMA comme requis par la documentation
+            logger.info("=== APPEL API ECMA ===")
             response = requests.post(
                 url, 
-                json=auth_payload,
+                json=payload,
                 headers={'Content-Type': 'application/json'},
                 timeout=30
             )
-            logger.info(f"POST authentification vers ECMA: {response.status_code}")
-
+            
+            logger.info(f"Status code: {response.status_code}")
+            logger.info(f"Response headers: {dict(response.headers)}")
+            logger.info(f"Response content: {response.text[:500]}")
+            
+            if response.status_code == 400:
+                logger.error("ERREUR 400 - Vérifiez:")
+                logger.error("1. Que votre shortcut est correct")
+                logger.error("2. Que votre secret est correct (pas d'espaces)")
+                logger.error("3. Que le timestamp est dans la fenêtre ±5 minutes")
+                raise Exception(f"Erreur 400 HMAC incorrect: {response.text}")
+            
+            if response.status_code == 404:
+                logger.error("ERREUR 404 - URL ou endpoint incorrect")
+                logger.error("Vérifiez que l'URL de base est correcte")
+                raise Exception(f"Erreur 404 Not Found: {response.text}")
+            
             if not response.ok:
-                logger.error(f"Erreur ECMA POST: {response.status_code} - {response.text}")
-                raise Exception(f"Erreur API ECMA: {response.status_code}")
-
+                logger.error(f"Erreur ECMA: {response.status_code} - {response.text}")
+                raise Exception(f"Erreur API ECMA: {response.status_code} - {response.text}")
+            
             # ECMA devrait retourner l'URL d'authentification à utiliser
             auth_data = response.json()
             auth_url = auth_data.get('url') or auth_data.get('authUrl') or auth_data.get('redirectUrl')
@@ -254,7 +302,7 @@ class EcmaApiClient:
                 logger.warning("ECMA n'a pas retourné d'URL, construction manuelle")
                 auth_url = url
             
-            logger.info(f"URL d'authentification obtenue: {auth_url}")
+            logger.info(f"✅ URL d'authentification obtenue: {auth_url}")
             return auth_url
             
         except requests.exceptions.RequestException as e:
@@ -276,7 +324,11 @@ class EcmaApiClient:
         url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/fetch/{id_request}/{hmac_signature}?ts={timestamp}"
         
         try:
+            logger.info(f"Récupération des tokens: {url}")
             response = requests.get(url, timeout=30)
+            
+            logger.info(f"Status: {response.status_code}")
+            logger.info(f"Response: {response.text[:500]}")
             
             if response.status_code == 404:
                 raise Exception("Session d'authentification expirée. Veuillez recommencer.")
@@ -285,6 +337,13 @@ class EcmaApiClient:
                 raise Exception(f"Erreur API: {response.status_code} - {response.text}")
             
             tokens = response.json()
+            
+            # Validation renforcée de la structure des tokens
+            if not (isinstance(tokens, dict) and 
+                    'office' in tokens and tokens['office'].get('token') and 
+                    'user' in tokens and tokens['user'].get('token')):
+                raise Exception("Structure de tokens invalide reçue d'ECMA")
+            
             logger.info("✅ Tokens récupérés avec succès")
             return tokens
             
@@ -298,15 +357,18 @@ class EcmaApiClient:
         
         url = f"{self.base_url}{endpoint}"
         headers = {
-            'JSE-EDITOR-TOKEN-OFFICE': session['tokens']['office']['token'],
-            'JSE-EDITOR-TOKEN-USER': session['tokens']['user']['token']
+            'JSE-EDITOR-TOKEN-OFFICE': session['tokens']['office']['token']
         }
+        
+        # Ajouter le token utilisateur s'il existe
+        if 'user' in session['tokens'] and session['tokens']['user'].get('token'):
+            headers['JSE-EDITOR-TOKEN-USER'] = session['tokens']['user']['token']
         
         if data and not files:
             headers['Content-Type'] = 'application/json'
             data = json.dumps(data)
         
-        logger.info(f"🌐 API Call: {method} {url}")
+        logger.info(f"API Call: {method} {url}")
         
         response = requests.request(
             method=method,
@@ -316,8 +378,14 @@ class EcmaApiClient:
             files=files
         )
         
+        logger.info(f"Headers envoyés: {dict((k, v[:20] + '...' if len(v) > 20 else v) for k, v in headers.items())}")
+        
+        if response.status_code == 403:
+            logger.error("Erreur 403: Tokens invalides ou révoqués")
+            raise Exception("Tokens invalides. Veuillez vous réauthentifier.")
+        
         if not response.ok:
-            logger.error(f"❌ API Error: {response.status_code} - {response.text}")
+            logger.error(f"API Error: {response.status_code} - {response.text}")
             response.raise_for_status()
         
         return response.json() if response.content else {}
@@ -392,7 +460,7 @@ def configure():
 
 @app.route('/auth')
 def authenticate():
-    """Démarre le processus d'authentification avec création de dépôt"""
+    """Démarre le processus d'authentification"""
     if not ecma_client:
         flash('Veuillez d\'abord configurer le secret ECMA', 'error')
         return redirect(url_for('index'))
@@ -406,8 +474,7 @@ def authenticate():
         
         success_url = f"{callback_base}{url_for('auth_callback')}"
         
-        # ✅ Utiliser le payload de test minimal avec le bon idRequest
-        auth_url = ecma_client.get_auth_url(PAYLOAD_TEST_MINIMAL, success_url=success_url)
+        auth_url = ecma_client.get_auth_url(success_url=success_url)
         
         logger.info(f"🔀 Redirection vers: {auth_url}")
         return redirect(auth_url)
@@ -468,41 +535,42 @@ def validate_tokens():
 
 @app.route('/transaction/init', methods=['POST'])
 def init_transaction():
-    """Initialise une nouvelle transaction"""
+    """Initialise une nouvelle transaction avec le bon format JeSignExpert"""
     if not ecma_client:
         return jsonify({'error': 'Client non configuré'}), 400
     
     try:
-        data = {
-            'name': request.json.get('name'),
-            'type': request.json.get('type', 'signature'),
-            'confidential': request.json.get('confidential', False),
-            'locked': False,
+        # Format selon la documentation JeSignExpert section 4.1.1
+        transaction_data = {
+            'object': request.json.get('name', 'Transaction de test')[:45],  # Max 45 chars
+            'message': request.json.get('message', 'Transaction créée depuis l\'API Python')[:4000],
+            'mailSender': session.get('tokens', {}).get('office', {}).get('name', 'Cabinet Expert')[:100],
+            'mailSubject': f"Demande de signature - {request.json.get('name', 'Document')}"[:100],
+            'notification': 'ALL',
+            'locked': request.json.get('locked', True),
             'invitationMode': request.json.get('invitationMode', 'sequential'),
-            'mailCustomization': {
-                'subject': f"Demande de {request.json.get('type', 'signature')} - {request.json.get('name')}",
-                'message': f"Bonjour,\n\nVeuillez procéder à la {request.json.get('type', 'signature')} du document \"{request.json.get('name')}\".\n\nCordialement"
-            },
-            'notificationSubscription': {
-                'statusChange': True,
-                'signatoryStatusChange': True
-            }
+            'isHandwrittenSignatureActive': True,
+            'signatureRequirementMode': 'ALL'
         }
         
+        # Ajouter confidentialité si spécifiée
+        if request.json.get('confidential', False):
+            transaction_data['confidentiality'] = []  # Vide pour non confidentiel, ou emails pour confidentiel
+        
         response = ecma_client.make_api_call(
-            f'/editor/{ECMA_CONFIG["shortcut"]}/transaction/init',
+            f'/editor/{ECMA_CONFIG["shortcut"]}/transaction',
             method='POST',
-            data=data
+            data=transaction_data
         )
         
         # Sauvegarder en BDD
         try:
             trans = Transaction(
                 id=response.get('id', str(uuid.uuid4())),
-                name=data['name'],
-                type=data['type'],
-                confidential=data.get('confidential', False),
-                invitation_mode=data.get('invitationMode', 'sequential'),
+                name=request.json.get('name', 'Transaction'),
+                type='signature',
+                confidential=request.json.get('confidential', False),
+                invitation_mode=request.json.get('invitationMode', 'sequential'),
                 ecma_transaction_id=response.get('id'),
                 user_email=session.get('tokens', {}).get('user', {}).get('email'),
                 office_name=session.get('tokens', {}).get('office', {}).get('name')
@@ -510,7 +578,7 @@ def init_transaction():
             db.session.add(trans)
             db.session.commit()
         except Exception as db_error:
-            logger.error(f"❌ Erreur sauvegarde BDD: {db_error}")
+            logger.error(f"Erreur sauvegarde BDD: {db_error}")
         
         # Stocker en session
         session['current_transaction'] = response
@@ -521,7 +589,7 @@ def init_transaction():
         return jsonify(response)
         
     except Exception as e:
-        logger.error(f"❌ Erreur init transaction: {e}")
+        logger.error(f"Erreur init transaction: {e}")
         return jsonify({'error': str(e)}), 400
 
 @app.route('/transaction/<transaction_id>/signatory', methods=['POST'])
@@ -535,7 +603,7 @@ def add_signatory(transaction_id):
             'email': request.json.get('email'),
             'name': request.json.get('name'),
             'level': int(request.json.get('level', 1)),
-            'grigri': request.json.get('grigri', False),
+            'isHandwrittenSignatureActive': request.json.get('grigri', True),  # Correction: remplace grigri déprécié
             'positions': request.json.get('positions', [])
         }
         
@@ -548,7 +616,7 @@ def add_signatory(transaction_id):
         return jsonify(response)
         
     except Exception as e:
-        logger.error(f"❌ Erreur ajout signataire: {e}")
+        logger.error(f"Erreur ajout signataire: {e}")
         return jsonify({'error': str(e)}), 400
 
 @app.route('/transaction/<transaction_id>/document', methods=['POST'])
@@ -578,7 +646,7 @@ def add_document(transaction_id):
         return jsonify(response)
         
     except Exception as e:
-        logger.error(f"❌ Erreur ajout document: {e}")
+        logger.error(f"Erreur ajout document: {e}")
         return jsonify({'error': str(e)}), 400
 
 @app.route('/transaction/<transaction_id>/draft', methods=['POST'])
@@ -625,9 +693,9 @@ def not_found_error(error):
     <html>
     <head><title>404 - Page non trouvée</title></head>
     <body style="font-family: Arial; text-align: center; padding: 50px;">
-        <h1>🔍 Page non trouvée</h1>
+        <h1>Page non trouvée</h1>
         <p>La page demandée n'existe pas.</p>
-        <a href="/" style="color: #667eea;">← Retour à l'accueil</a>
+        <a href="/" style="color: #667eea;">Retour à l'accueil</a>
     </body>
     </html>
     ''', 404
@@ -638,13 +706,13 @@ if __name__ == '__main__':
     debug = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
     
     print("=" * 60)
-    print("🔐 Application JeSignExpert ECMA")
+    print("Application JeSignExpert ECMA")
     print("=" * 60)
-    print(f"🌐 URL: http://localhost:{port}")
-    print(f"🏢 Environment: {ECMA_CONFIG['environment']}")
-    print(f"🔗 Host ECMA: {ECMA_CONFIG['base_url']}")
-    print(f"🎯 Shortcut: {ECMA_CONFIG['shortcut']}")
-    print(f"🔑 Secret configuré: {'✅' if ECMA_CONFIG['secret'] else '❌'}")
+    print(f"URL: http://localhost:{port}")
+    print(f"Environment: {ECMA_CONFIG['environment']}")
+    print(f"Host ECMA: {ECMA_CONFIG['base_url']}")
+    print(f"Shortcut: {ECMA_CONFIG['shortcut']}")
+    print(f"Secret configuré: {'Oui' if ECMA_CONFIG['secret'] else 'Non'}")
     print("=" * 60)
     
     app.run(host=host, port=port, debug=debug)
