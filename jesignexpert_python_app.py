@@ -180,24 +180,37 @@ class EcmaApiClient:
         ).hexdigest()
     
     def get_timestamp(self):
-        """Force l'utilisation d'un timestamp externe"""
+        """Génère un timestamp en temps réel basé sur l'heure du serveur ECMA"""
         try:
-            response = requests.get('http://worldtimeapi.org/api/timezone/UTC', timeout=10)
-            if response.ok:
-                time_data = response.json()
-                external_timestamp = int(time_data['unixtime'] * 1000)
-                logger.info(f"Timestamp externe forcé: {external_timestamp} ms")
-                return external_timestamp
+            # Utiliser l'heure du serveur ECMA comme référence
+            response = requests.get(f"{self.base_url}/swagger-ui.html", timeout=5)
+            if response.ok and 'Date' in response.headers:
+                # Parser l'heure du serveur ECMA depuis les headers HTTP
+                server_date = response.headers['Date']
+                # Format: 'Tue, 02 Sep 2025 21:15:20 GMT'
+                from email.utils import parsedate_to_datetime
+                server_time = parsedate_to_datetime(server_date)
+                timestamp = int(server_time.timestamp() * 1000)
+                logger.info(f"Timestamp basé sur serveur ECMA: {timestamp} ms")
+                logger.info(f"Heure serveur ECMA: {server_date}")
+                return timestamp
         except Exception as e:
-            logger.error(f"Erreur API externe: {e}")
+            logger.warning(f"Impossible d'utiliser l'heure serveur ECMA: {e}")
         
-        # Si échec, calculer manuellement le timestamp correct
-        # 2 septembre 2025, 21:09:23 UTC = environ 1725315763000
-        manual_timestamp = 1725315763000
-        logger.info(f"Timestamp manuel de fallback: {manual_timestamp} ms")
-        return manual_timestamp
+        # Fallback: timestamp actuel avec ajustement
+        import calendar
+        from datetime import timezone
         
-    def get_auth_url(self, success_url=None, callback_url=None):
+        # Générer timestamp pour "maintenant" en UTC
+        now_utc = datetime.now(timezone.utc)
+        timestamp = int(now_utc.timestamp() * 1000)
+        
+        logger.info(f"Timestamp UTC calculé: {timestamp} ms")
+        logger.info(f"Heure UTC calculée: {now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        
+        return timestamp
+
+def get_auth_url(self, success_url=None, callback_url=None):
         """Effectue l'authentification et retourne l'URL ComptExpert"""
         # Test de validation HMAC avec l'exemple de la doc
         logger.info("=== TEST DE VALIDATION HMAC ===")
