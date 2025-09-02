@@ -104,9 +104,6 @@ def check_config():
         missing.append('ECMA_BASE_URL')
     if not ECMA_CONFIG['shortcut']:
         missing.append('ECMA_SHORTCUT')
-    elif len(ECMA_CONFIG['shortcut']) != 10:  # es_mUVuCdFh a 10 caractères
-        logger.error(f"ECMA_SHORTCUT invalide: {ECMA_CONFIG['shortcut']} (longueur: {len(ECMA_CONFIG['shortcut'])})")
-        missing.append('ECMA_SHORTCUT (longueur incorrecte)')
     if not ECMA_CONFIG['secret']:
         missing.append('ECMA_SECRET')
     elif not ECMA_CONFIG['secret'].strip() == ECMA_CONFIG['secret']:
@@ -122,7 +119,7 @@ def check_config():
         return False
     
     logger.info("Configuration .env chargée avec succès")
-    logger.info(f"Shortcut utilisé: {ECMA_CONFIG['shortcut']}")
+    logger.info(f"Shortcut utilisé: {ECMA_CONFIG['shortcut']} (longueur: {len(ECMA_CONFIG['shortcut'])})")
     return True
 
 class EcmaApiClient:
