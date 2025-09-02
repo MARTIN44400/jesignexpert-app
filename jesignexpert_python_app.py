@@ -21,8 +21,6 @@ from datetime import datetime, timedelta
 import logging
 from dotenv import load_dotenv
 
-logger = logging.getLogger(__name__)
-
 # Charger les variables d'environnement
 load_dotenv()
 
@@ -31,7 +29,7 @@ app = Flask(__name__)
 
 # Configuration depuis les variables d'environnement
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-key-change-in-production')
-app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
+app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'Uploads')
 app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 100 * 1024 * 1024))
 
 # Configuration base de données
@@ -106,8 +104,14 @@ def check_config():
         missing.append('ECMA_BASE_URL')
     if not ECMA_CONFIG['shortcut']:
         missing.append('ECMA_SHORTCUT')
+    elif len(ECMA_CONFIG['shortcut']) != 10:  # es_mUVuCdFh a 10 caractères
+        logger.error(f"ECMA_SHORTCUT invalide: {ECMA_CONFIG['shortcut']} (longueur: {len(ECMA_CONFIG['shortcut'])})")
+        missing.append('ECMA_SHORTCUT (longueur incorrecte)')
     if not ECMA_CONFIG['secret']:
         missing.append('ECMA_SECRET')
+    elif not ECMA_CONFIG['secret'].strip() == ECMA_CONFIG['secret']:
+        logger.error("ECMA_SECRET contient des espaces ou caractères invisibles")
+        missing.append('ECMA_SECRET (contient des espaces)')
     
     if app.secret_key == 'dev-key-change-in-production' and os.getenv('FLASK_ENV') == 'production':
         logger.warning('ATTENTION: Changez FLASK_SECRET_KEY en production!')
@@ -118,16 +122,18 @@ def check_config():
         return False
     
     logger.info("Configuration .env chargée avec succès")
+    logger.info(f"Shortcut utilisé: {ECMA_CONFIG['shortcut']}")
     return True
 
 class EcmaApiClient:
     """Client pour l'API ECMA JeSignExpert"""
     
     def __init__(self, base_url, shortcut, secret):
-        self.base_url = base_url
+        self.base_url = base_url.rstrip('/')  # Supprimer les / finaux
         self.shortcut = shortcut
         self.secret = secret.strip()  # Nettoyage du secret
-        
+        logger.info(f"Client ECMA initialisé avec shortcut: {self.shortcut}")
+    
     def test_connectivity(self):
         """Test de connectivité initial avec l'URL de base"""
         try:
@@ -141,19 +147,14 @@ class EcmaApiClient:
     
     def test_hmac_function(self):
         """Test avec l'exemple de la documentation JeSignExpert"""
-        # Valeurs exactes de la doc
         shortcut_test = "shortcut"
         id_request_test = "FCmWsIqOv8hqXBR78OHKoJSaH9Aoc0"
         timestamp_test = "1544783760000"
         secret_test = "secret"
         
-        # HMAC attendu selon la doc
         hmac_expected = "db2070ed2c1348f4c697797f840cb85ce07769bec64f178e61314312155210e5"
-        
-        # Construction de la chaîne
         concat_test = f"{shortcut_test}||{id_request_test}||{timestamp_test}"
         
-        # Test de votre fonction
         hmac_generated = hmac.new(
             secret_test.encode('utf-8'),
             concat_test.encode('utf-8'),
@@ -180,81 +181,91 @@ class EcmaApiClient:
             data.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
-        
-
-
-     def get_timestamp(self):
-         # Essayer plusieurs sources externes pour garantir un timestamp UTC précis
-         for url in ['https://timeapi.io/api/Time/current/zone?timeZone=UTC', 
+    
+    def get_timestamp(self):
+        """Obtient un timestamp UTC précis"""
+        for url in ['https://timeapi.io/api/Time/current/zone?timeZone=UTC', 
                     'http://worldtimeapi.org/api/timezone/UTC']:
-             try:
-                 response = requests.get(url, timeout=5)
-                 if response.ok:
-                     time_data = response.json()
-                     if 'dateTime' in time_data:  # timeapi.io
-                         external_timestamp = int(datetime.fromisoformat(time_data['dateTime'].replace('Z', '')).timestamp() * 1000)
-                         logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
-                         logger.info(f"Heure externe UTC: {time_data['dateTime']}")
-                         return external_timestamp
-                     elif 'unixtime' in time_data:  # worldtimeapi.org
-                         external_timestamp = int(time_data['unixtime'] * 1000)
-                         logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
-                         logger.info(f"Heure externe UTC: {datetime.utcfromtimestamp(time_data['unixtime']).strftime('%Y-%m-%d %H:%M:%S')}")
-                         return external_timestamp
-             except Exception as e:
-                 logger.warning(f"Erreur synchronisation externe ({url}): {e}")
-         
-         # Fallback sur le système, avec vérification
-         system_timestamp = int(time.time() * 1000)
-         system_utc = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-         logger.info(f"Timestamp système: {system_timestamp} ms")
-         logger.info(f"Heure système UTC: {system_utc}")
-         
-         # Vérifier si le timestamp est dans une plage raisonnable
-         expected_timestamp = 1756848000000  # 02/09/2025 20:00 UTC
-         if abs(system_timestamp - expected_timestamp) > 900000:  # ±15 min
-             logger.error(f"Timestamp système incohérent: {system_timestamp} ms, attendu ~{expected_timestamp} ms")
-             raise Exception("Horloge système désynchronisée")
-         
-         return system_timestamp
+            try:
+                response = requests.get(url, timeout=5)
+                if response.ok:
+                    time_data = response.json()
+                    if 'dateTime' in time_data:  # timeapi.io
+                        external_timestamp = int(datetime.fromisoformat(time_data['dateTime'].replace('Z', '')).timestamp() * 1000)
+                        logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
+                        logger.info(f"Heure externe UTC: {time_data['dateTime']}")
+                        return external_timestamp
+                    elif 'unixtime' in time_data:  # worldtimeapi.org
+                        external_timestamp = int(time_data['unixtime'] * 1000)
+                        logger.info(f"Timestamp externe ({url}): {external_timestamp} ms")
+                        logger.info(f"Heure externe UTC: {datetime.utcfromtimestamp(time_data['unixtime']).strftime('%Y-%m-%d %H:%M:%S')}")
+                        return external_timestamp
+            except Exception as e:
+                logger.warning(f"Erreur synchronisation externe ({url}): {e}")
+        
+        # Fallback sur le système, avec vérification
+        system_timestamp = int(time.time() * 1000)
+        system_utc = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        logger.info(f"Timestamp système: {system_timestamp} ms")
+        logger.info(f"Heure système UTC: {system_utc}")
+        
+        # Vérifier si le timestamp est dans une plage raisonnable
+        expected_timestamp = 1756855020000  # 02/09/2025 22:37 UTC
+        if abs(system_timestamp - expected_timestamp) > 900000:  # ±15 min
+            logger.error(f"Timestamp système incohérent: {system_timestamp} ms, attendu ~{expected_timestamp} ms")
+            raise Exception("Horloge système désynchronisée")
+        
+        return system_timestamp
+    
+    def get_auth_url(self, success_url):
+        """Génère l'URL d'authentification"""
+        id_request = self.generate_id_request()
+        timestamp = str(self.get_timestamp())
+        hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"
+        hmac_value = self.generate_hmac(hmac_data)
+        
+        url = (
+            f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/"
+            f"{id_request}/{hmac_value}?ts={timestamp}"
+        )
+        
+        session['auth_id_request'] = id_request
+        session['auth_timestamp'] = timestamp
+        session['auth_hmac'] = hmac_value
+        
+        logger.info(f"Shortcut: {self.shortcut}")
+        logger.info(f"HMAC data: {hmac_data}")
+        logger.info(f"HMAC: {hmac_value}")
+        logger.info(f"URL auth: {url}")
+        
+        return url
     
     def fetch_tokens(self):
-        """Récupère les tokens après authentification"""
-        if not all(k in session for k in ['auth_id_request', 'auth_timestamp', 'auth_hmac']):
-            raise Exception("Aucune session d'authentification trouvée")
+        """Récupère les tokens après callback"""
+        id_request = session.get('auth_id_request')
+        timestamp = session.get('auth_timestamp')
+        hmac_value = session.get('auth_hmac')
         
-        id_request = session['auth_id_request']
-        timestamp = session['auth_timestamp']
-        hmac_signature = session['auth_hmac']
+        if not all([id_request, timestamp, hmac_value]):
+            raise Exception("Données d'authentification manquantes dans la session")
         
-        url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/fetch/{id_request}/{hmac_signature}?ts={timestamp}"
+        url = (
+            f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/"
+            f"{id_request}/{hmac_value}?ts={timestamp}"
+        )
         
-        try:
-            logger.info(f"Récupération des tokens: {url}")
-            response = requests.get(url, timeout=30)
-            
-            logger.info(f"Status: {response.status_code}")
-            logger.info(f"Response: {response.text[:500]}")
-            
-            if response.status_code == 404:
-                raise Exception("Session d'authentification expirée. Veuillez recommencer.")
-            
-            if not response.ok:
-                raise Exception(f"Erreur API: {response.status_code} - {response.text}")
-            
-            tokens = response.json()
-            
-            # Validation renforcée de la structure des tokens
-            if not (isinstance(tokens, dict) and 
-                    'office' in tokens and tokens['office'].get('token') and 
-                    'user' in tokens and tokens['user'].get('token')):
-                raise Exception("Structure de tokens invalide reçue d'ECMA")
-            
-            logger.info("✅ Tokens récupérés avec succès")
-            return tokens
-            
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"Erreur de connexion à ECMA: {e}")
+        data = {
+            'success_url': session.get('success_url'),
+            'generate_hmac': True
+        }
+        
+        response = requests.post(url, json=data)
+        logger.info(f"Fetch tokens: {response.status_code} - {response.text}")
+        
+        if not response.ok:
+            raise Exception(f"Erreur récupération tokens: {response.status_code} - {response.text}")
+        
+        return response.json()
     
     def make_api_call(self, endpoint, method='GET', data=None, files=None):
         """Effectue un appel API avec les tokens stockés en session"""
@@ -266,7 +277,6 @@ class EcmaApiClient:
             'JSE-EDITOR-TOKEN-OFFICE': session['tokens']['office']['token']
         }
         
-        # Ajouter le token utilisateur s'il existe
         if 'user' in session['tokens'] and session['tokens']['user'].get('token'):
             headers['JSE-EDITOR-TOKEN-USER'] = session['tokens']['user']['token']
         
@@ -372,7 +382,6 @@ def authenticate():
         return redirect(url_for('index'))
     
     try:
-        # Forcer HTTPS pour les callbacks en production
         if os.getenv('FLASK_ENV') == 'production':
             callback_base = f"https://{request.host}"
         else:
@@ -409,7 +418,6 @@ def auth_callback():
         
         session['tokens'] = tokens
         
-        # Nettoyer les données d'auth temporaires
         for key in ['auth_id_request', 'auth_timestamp', 'auth_hmac']:
             session.pop(key, None)
         
@@ -421,7 +429,6 @@ def auth_callback():
         logger.error(f"❌ Erreur récupération tokens: {e}")
         flash(f'Erreur lors de l\'authentification: {e}', 'error')
         
-        # Nettoyer la session en cas d'erreur
         for key in ['auth_id_request', 'auth_timestamp', 'auth_hmac']:
             session.pop(key, None)
             
@@ -446,9 +453,8 @@ def init_transaction():
         return jsonify({'error': 'Client non configuré'}), 400
     
     try:
-        # Format selon la documentation JeSignExpert section 4.1.1
         transaction_data = {
-            'object': request.json.get('name', 'Transaction de test')[:45],  # Max 45 chars
+            'object': request.json.get('name', 'Transaction de test')[:45],
             'message': request.json.get('message', 'Transaction créée depuis l\'API Python')[:4000],
             'mailSender': session.get('tokens', {}).get('office', {}).get('name', 'Cabinet Expert')[:100],
             'mailSubject': f"Demande de signature - {request.json.get('name', 'Document')}"[:100],
@@ -459,9 +465,8 @@ def init_transaction():
             'signatureRequirementMode': 'ALL'
         }
         
-        # Ajouter confidentialité si spécifiée
         if request.json.get('confidential', False):
-            transaction_data['confidentiality'] = []  # Vide pour non confidentiel, ou emails pour confidentiel
+            transaction_data['confidentiality'] = []
         
         response = ecma_client.make_api_call(
             f'/editor/{ECMA_CONFIG["shortcut"]}/transaction',
@@ -469,7 +474,6 @@ def init_transaction():
             data=transaction_data
         )
         
-        # Sauvegarder en BDD
         try:
             trans = Transaction(
                 id=response.get('id', str(uuid.uuid4())),
@@ -486,7 +490,6 @@ def init_transaction():
         except Exception as db_error:
             logger.error(f"Erreur sauvegarde BDD: {db_error}")
         
-        # Stocker en session
         session['current_transaction'] = response
         transactions = session.get('transactions', [])
         transactions.append(response)
@@ -509,7 +512,7 @@ def add_signatory(transaction_id):
             'email': request.json.get('email'),
             'name': request.json.get('name'),
             'level': int(request.json.get('level', 1)),
-            'isHandwrittenSignatureActive': request.json.get('grigri', True),  # Correction: remplace grigri déprécié
+            'isHandwrittenSignatureActive': request.json.get('grigri', True),
             'positions': request.json.get('positions', [])
         }
         
