@@ -179,15 +179,7 @@ class EcmaApiClient:
             hashlib.sha256
         ).hexdigest()
     
-    def get_timestamp_fixed(self):
-        """Force un timestamp pour 02/09/2025 21:45 UTC pour test"""
-        # Timestamp calculé pour 02/09/2025 21:45:00 UTC
-        fixed_timestamp = 1725318300000
-        
-        logger.info(f"Timestamp forcé: {fixed_timestamp} ms")
-        logger.info(f"Date correspondante: 02/09/2025 21:45:00 UTC")
-        
-        return fixed_timestamp
+
     
     def get_auth_url(self, success_url=None, callback_url=None):
         """Effectue l'authentification et retourne l'URL ComptExpert"""
@@ -288,37 +280,17 @@ class EcmaApiClient:
             raise Exception("Erreur de connexion à l'API d'authentification")
         except requests.exceptions.RequestException as e:
             raise Exception(f"Erreur réseau: {e}")
-    
+        
     def get_timestamp_fixed(self):
-        """Génère un timestamp en temps réel basé sur l'heure du serveur ECMA"""
-        try:
-            # Utiliser l'heure du serveur ECMA comme référence
-            response = requests.get(f"{self.base_url}/swagger-ui.html", timeout=5)
-            if response.ok and 'Date' in response.headers:
-                # Parser l'heure du serveur ECMA depuis les headers HTTP
-                server_date = response.headers['Date']
-                # Format: 'Tue, 02 Sep 2025 21:15:20 GMT'
-                from email.utils import parsedate_to_datetime
-                server_time = parsedate_to_datetime(server_date)
-                timestamp = int(server_time.timestamp() * 1000)
-                logger.info(f"Timestamp basé sur serveur ECMA: {timestamp} ms")
-                logger.info(f"Heure serveur ECMA: {server_date}")
-                return timestamp
-        except Exception as e:
-            logger.warning(f"Impossible d'utiliser l'heure serveur ECMA: {e}")
-        
-        # Fallback: timestamp actuel avec ajustement
-        from datetime import timezone
-        
-        # Générer timestamp pour "maintenant" en UTC
-        now_utc = datetime.now(timezone.utc)
-        timestamp = int(now_utc.timestamp() * 1000)
-        
-        logger.info(f"Timestamp UTC calculé: {timestamp} ms")
-        logger.info(f"Heure UTC calculée: {now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-        
-        return timestamp
-    
+            """Force un timestamp pour 02/09/2025 21:55 UTC pour test"""
+            # Timestamp calculé pour 02/09/2025 21:55:00 UTC
+            fixed_timestamp = 1725318900000
+            
+            logger.info(f"Timestamp forcé: {fixed_timestamp} ms")
+            logger.info(f"Date correspondante: 02/09/2025 21:55:00 UTC")
+            
+            return fixed_timestamp
+
     def fetch_tokens(self):
         """Récupère les tokens après callback"""
         id_request = session.get('auth_id_request')
@@ -345,6 +317,8 @@ class EcmaApiClient:
             raise Exception(f"Erreur récupération tokens: {response.status_code} - {response.text}")
         
         return response.json()
+    
+
     
     def make_api_call(self, endpoint, method='GET', data=None, files=None):
         """Effectue un appel API avec les tokens stockés en session"""
@@ -716,18 +690,3 @@ if __name__ == '__main__':
     
     app.run(host=host, port=port, debug=debug)
 
-def debug_timestamp_conversion(self):
-    """Debug de la conversion timestamp"""
-    # Test 1: conversion manuelle
-    from datetime import datetime, timezone
-    manual_date = datetime(2025, 9, 2, 21, 22, 24, tzinfo=timezone.utc)
-    manual_timestamp = int(manual_date.timestamp() * 1000)
-    logger.info(f"Timestamp manuel pour 2025-09-02 21:22:24 UTC: {manual_timestamp}")
-    
-    # Test 2: conversion avec parsedate_to_datetime
-    from email.utils import parsedate_to_datetime
-    header_date = "Tue, 02 Sep 2025 21:22:24 GMT"
-    parsed_date = parsedate_to_datetime(header_date)
-    parsed_timestamp = int(parsed_date.timestamp() * 1000)
-    logger.info(f"Timestamp parsé depuis header: {parsed_timestamp}")
-    logger.info(f"Timezone du timestamp parsé: {parsed_date.tzinfo}")
