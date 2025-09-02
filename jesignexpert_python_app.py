@@ -179,15 +179,15 @@ class EcmaApiClient:
             hashlib.sha256
         ).hexdigest()
     
-def get_timestamp_fixed(self):
-    """Force un timestamp pour 02/09/2025 21:45 UTC pour test"""
-    # Timestamp calculé pour 02/09/2025 21:45:00 UTC
-    fixed_timestamp = 1725318300000
-    
-    logger.info(f"Timestamp forcé: {fixed_timestamp} ms")
-    logger.info(f"Date correspondante: 02/09/2025 21:45:00 UTC")
-    
-    return fixed_timestamp
+    def get_timestamp_fixed(self):
+        """Force un timestamp pour 02/09/2025 21:45 UTC pour test"""
+        # Timestamp calculé pour 02/09/2025 21:45:00 UTC
+        fixed_timestamp = 1725318300000
+        
+        logger.info(f"Timestamp forcé: {fixed_timestamp} ms")
+        logger.info(f"Date correspondante: 02/09/2025 21:45:00 UTC")
+        
+        return fixed_timestamp
     
     def get_auth_url(self, success_url=None, callback_url=None):
         """Effectue l'authentification et retourne l'URL ComptExpert"""
