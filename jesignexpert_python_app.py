@@ -734,3 +734,19 @@ if __name__ == '__main__':
     print("=" * 60)
     
     app.run(host=host, port=port, debug=debug)
+
+def debug_timestamp_conversion(self):
+    """Debug de la conversion timestamp"""
+    # Test 1: conversion manuelle
+    from datetime import datetime, timezone
+    manual_date = datetime(2025, 9, 2, 21, 22, 24, tzinfo=timezone.utc)
+    manual_timestamp = int(manual_date.timestamp() * 1000)
+    logger.info(f"Timestamp manuel pour 2025-09-02 21:22:24 UTC: {manual_timestamp}")
+    
+    # Test 2: conversion avec parsedate_to_datetime
+    from email.utils import parsedate_to_datetime
+    header_date = "Tue, 02 Sep 2025 21:22:24 GMT"
+    parsed_date = parsedate_to_datetime(header_date)
+    parsed_timestamp = int(parsed_date.timestamp() * 1000)
+    logger.info(f"Timestamp parsé depuis header: {parsed_timestamp}")
+    logger.info(f"Timezone du timestamp parsé: {parsed_date.tzinfo}")
