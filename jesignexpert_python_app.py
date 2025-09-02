@@ -168,7 +168,7 @@ class EcmaApiClient:
         """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
         id_request = self.generate_id_request()
         timestamp = self.get_timestamp()
-        hmac_data = f"{self.shortcut}{id_request}{timestamp}"
+        hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"  # Ajout des séparateurs ||
         hmac_signature = self.generate_hmac(hmac_data)
         
         # URL de l'endpoint ECMA pour POST
@@ -220,6 +220,7 @@ class EcmaApiClient:
         except Exception as e:
             logger.error(f"Erreur lors de l'obtention de l'URL d'auth: {e}")
             raise
+
     
     def fetch_tokens(self):
         """Récupère les tokens après authentification"""
