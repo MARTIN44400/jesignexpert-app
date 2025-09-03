@@ -169,39 +169,48 @@ class EcmaApiClient:
         ).hexdigest()
         
     def get_timestamp(self):
-        """Retourne le timestamp Unix actuel en millisecondes, avec synchronisation si nécessaire"""
+        """
+        Retourne le timestamp Unix actuel en millisecondes (UTC),
+        synchronisé via une API externe fiable.
+        Logue la valeur finale utilisée + l'écart avec l'horloge système,
+        et alerte si la dérive dépasse la tolérance de ±5 minutes.
+        """
+        system_ts = int(time.time() * 1000)  # Horloge système (ms)
+        tolerance_ms = 300_000  # 5 minutes
+
         try:
-            # Timestamp système en millisecondes
-            system_timestamp = int(time.time() * 1000)
-            logger.info(f"Timestamp système OK: {system_timestamp} ms")
-            
-            # Vérification que le timestamp est cohérent (proche de septembre 2025)
-            # Timestamp attendu pour septembre 2025: environ 1725292800000
-            expected_min = 1720000000000  # Juillet 2024
-            expected_max = 1800000000000  # Novembre 2026
-            
-            if not (expected_min <= system_timestamp <= expected_max):
-                logger.warning(f"Timestamp suspect: {system_timestamp}, tentative de synchronisation externe")
-                raise Exception("Timestamp système incohérent")
-            
-            return system_timestamp
-            
+            # 🔗 API publique fiable (UTC)
+            resp = requests.get("http://worldtimeapi.org/api/timezone/Etc/UTC", timeout=5)
+            if resp.ok:
+                utc_ts = int(resp.json()["unixtime"]) * 1000  # secondes -> ms
+                drift = utc_ts - system_ts
+
+                # Log normal
+                logger.info(
+                    f"[Timestamp] UTC externe utilisé: {utc_ts} "
+                    f"(écart système: {drift} ms, tolérance ±{tolerance_ms} ms)"
+                )
+
+                # 🚨 Alerte si dérive hors tolérance
+                if abs(drift) > tolerance_ms:
+                    logger.error(
+                        f"[Timestamp] ⚠️ Dérive horloge système détectée: {drift} ms "
+                        f"(tolérance ±{tolerance_ms} ms)"
+                    )
+
+                return utc_ts
+            else:
+                logger.error(f"[Timestamp] Erreur API worldtimeapi.org: {resp.status_code}")
         except Exception as e:
-            logger.error(f"Erreur lors de l'obtention du timestamp système: {e}")
-            # Fallback : essayer une API externe
-            try:
-                response = requests.get('http://worldtimeapi.org/api/timezone/UTC', timeout=5)
-                if response.ok:
-                    time_data = response.json()
-                    external_timestamp = int(time_data['unixtime'] * 1000)  # Convertir en ms
-                    logger.info(f"Timestamp externe obtenu: {external_timestamp} ms")
-                    return external_timestamp
-                else:
-                    logger.error("Impossible d'obtenir l'heure externe, fallback système")
-                    return int(time.time() * 1000)
-            except Exception as e:
-                logger.error(f"Erreur synchronisation externe: {e}")
-                return int(time.time() * 1000)  # Dernier recours
+            logger.error(f"[Timestamp] Erreur lors de la synchro UTC: {e}")
+
+        # 🟠 Fallback si l’API externe est KO → horloge système
+        logger.warning(
+            f"[Timestamp] Fallback système utilisé: {system_ts} "
+            f"(tolérance ±{tolerance_ms} ms)"
+        )
+        return system_ts
+
     
     def get_auth_url(self, success_url=None, callback_url=None):
         """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
