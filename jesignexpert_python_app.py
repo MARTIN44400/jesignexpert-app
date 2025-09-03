@@ -170,38 +170,40 @@ class EcmaApiClient:
         
     def get_timestamp(self):
         """Retourne le timestamp Unix actuel en millisecondes, avec synchronisation si nécessaire"""
+        # Tentative de récupération de l'heure du serveur JeSignExpert via header Date
         try:
-            # Timestamp système en millisecondes
-            system_timestamp = int(time.time() * 1000)
-            logger.info(f"Timestamp système OK: {system_timestamp} ms")
-            
-            # Vérification que le timestamp est cohérent (proche de septembre 2025)
-            # Timestamp attendu pour septembre 2025: environ 1725292800000
-            expected_min = 1720000000000  # Juillet 2024
-            expected_max = 1800000000000  # Novembre 2026
-            
-            if not (expected_min <= system_timestamp <= expected_max):
-                logger.warning(f"Timestamp suspect: {system_timestamp}, tentative de synchronisation externe")
-                raise Exception("Timestamp système incohérent")
-            
-            return system_timestamp
-            
+            url = f"{self.base_url}/editor/{self.shortcut}/token/validateCheck"
+            resp = requests.head(url, timeout=5)
+            date_str = resp.headers.get('Date')
+            if date_str:
+                utc_dt = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S GMT')
+                utc_ts = int(utc_dt.timestamp() * 1000)
+                logger.info(f"[Timestamp] Heure serveur JeSignExpert: {date_str} -> {utc_ts} ms")
+                return utc_ts
+            else:
+                logger.warning("[Timestamp] Header Date absent, fallback sur APIs externes")
         except Exception as e:
-            logger.error(f"Erreur lors de l'obtention du timestamp système: {e}")
-            # Fallback : essayer une API externe
+            logger.error(f"[Timestamp] Erreur récupération heure serveur JeSignExpert: {e}")
+            logger.warning("[Timestamp] Fallback sur APIs externes")
+        
+        # APIs externes
+        for url in ['http://worldtimeapi.org/api/timezone/UTC', 'https://timeapi.io/api/Time/current/zone?timeZone=UTC']:
             try:
-                response = requests.get('http://worldtimeapi.org/api/timezone/UTC', timeout=5)
+                response = requests.get(url, timeout=5)
                 if response.ok:
                     time_data = response.json()
                     external_timestamp = int(time_data['unixtime'] * 1000)  # Convertir en ms
-                    logger.info(f"Timestamp externe obtenu: {external_timestamp} ms")
+                    logger.info(f"[Timestamp] Timestamp externe obtenu ({url}): {external_timestamp} ms")
                     return external_timestamp
                 else:
-                    logger.error("Impossible d'obtenir l'heure externe, fallback système")
-                    return int(time.time() * 1000)
+                    logger.error(f"[Timestamp] Impossible d'obtenir l'heure externe ({url}), fallback système")
             except Exception as e:
-                logger.error(f"Erreur synchronisation externe: {e}")
-                return int(time.time() * 1000)  # Dernier recours
+                logger.error(f"[Timestamp] Erreur synchronisation externe ({url}): {e}")
+        
+        # Fallback système
+        system_timestamp = int(time.time() * 1000)
+        logger.warning(f"[Timestamp] Fallback système utilisé: {system_timestamp} ms")
+        return system_timestamp
     
     def get_auth_url(self, success_url=None, callback_url=None):
         """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
