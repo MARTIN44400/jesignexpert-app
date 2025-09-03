@@ -29,7 +29,7 @@ app = Flask(__name__)
 
 # Configuration depuis les variables d'environnement
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-key-change-in-production')
-app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'Uploads')
+app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 100 * 1024 * 1024))
 
 # Configuration base de données
@@ -106,9 +106,6 @@ def check_config():
         missing.append('ECMA_SHORTCUT')
     if not ECMA_CONFIG['secret']:
         missing.append('ECMA_SECRET')
-    elif not ECMA_CONFIG['secret'].strip() == ECMA_CONFIG['secret']:
-        logger.error("ECMA_SECRET contient des espaces ou caractères invisibles")
-        missing.append('ECMA_SECRET (contient des espaces)')
     
     if app.secret_key == 'dev-key-change-in-production' and os.getenv('FLASK_ENV') == 'production':
         logger.warning('ATTENTION: Changez FLASK_SECRET_KEY en production!')
@@ -119,39 +116,31 @@ def check_config():
         return False
     
     logger.info("Configuration .env chargée avec succès")
-    logger.info(f"Shortcut utilisé: {ECMA_CONFIG['shortcut']} (longueur: {len(ECMA_CONFIG['shortcut'])})")
     return True
 
 class EcmaApiClient:
     """Client pour l'API ECMA JeSignExpert"""
     
     def __init__(self, base_url, shortcut, secret):
-        self.base_url = base_url.rstrip('/')  # Supprimer les / finaux
+        self.base_url = base_url
         self.shortcut = shortcut
         self.secret = secret.strip()  # Nettoyage du secret
-        logger.info(f"Client ECMA initialisé avec shortcut: {self.shortcut}")
-    
-    def test_connectivity(self):
-        """Test de connectivité initial avec l'URL de base"""
-        try:
-            url = f"{self.base_url}/swagger-ui.html"  # Interface Swagger connue
-            response = requests.get(url, timeout=10)
-            logger.info(f"Test connectivité: {response.status_code}")
-            return response.ok
-        except Exception as e:
-            logger.error(f"Test connectivité échoué: {e}")
-            return False
-    
+        
     def test_hmac_function(self):
         """Test avec l'exemple de la documentation JeSignExpert"""
+        # Valeurs exactes de la doc
         shortcut_test = "shortcut"
         id_request_test = "FCmWsIqOv8hqXBR78OHKoJSaH9Aoc0"
         timestamp_test = "1544783760000"
         secret_test = "secret"
         
+        # HMAC attendu selon la doc
         hmac_expected = "db2070ed2c1348f4c697797f840cb85ce07769bec64f178e61314312155210e5"
+        
+        # Construction de la chaîne
         concat_test = f"{shortcut_test}||{id_request_test}||{timestamp_test}"
         
+        # Test de votre fonction
         hmac_generated = hmac.new(
             secret_test.encode('utf-8'),
             concat_test.encode('utf-8'),
@@ -167,9 +156,9 @@ class EcmaApiClient:
     
     def generate_id_request(self):
         """Génère un idRequest unique de 30 caractères alphanumériques"""
-        import secrets
+        import random
         import string
-        return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(30))
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=30))
     
     def generate_hmac(self, data):
         """Génère un HMAC SHA256"""
@@ -178,147 +167,166 @@ class EcmaApiClient:
             data.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
-    
-
+        
+    def get_timestamp(self):
+        """Retourne le timestamp Unix actuel en millisecondes, avec synchronisation si nécessaire"""
+        try:
+            # Timestamp système en millisecondes
+            system_timestamp = int(time.time() * 1000)
+            logger.info(f"Timestamp système OK: {system_timestamp} ms")
+            
+            # Vérification que le timestamp est cohérent (proche de septembre 2025)
+            # Timestamp attendu pour septembre 2025: environ 1725292800000
+            expected_min = 1720000000000  # Juillet 2024
+            expected_max = 1800000000000  # Novembre 2026
+            
+            if not (expected_min <= system_timestamp <= expected_max):
+                logger.warning(f"Timestamp suspect: {system_timestamp}, tentative de synchronisation externe")
+                raise Exception("Timestamp système incohérent")
+            
+            return system_timestamp
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de l'obtention du timestamp système: {e}")
+            # Fallback : essayer une API externe
+            try:
+                response = requests.get('http://worldtimeapi.org/api/timezone/UTC', timeout=5)
+                if response.ok:
+                    time_data = response.json()
+                    external_timestamp = int(time_data['unixtime'] * 1000)  # Convertir en ms
+                    logger.info(f"Timestamp externe obtenu: {external_timestamp} ms")
+                    return external_timestamp
+                else:
+                    logger.error("Impossible d'obtenir l'heure externe, fallback système")
+                    return int(time.time() * 1000)
+            except Exception as e:
+                logger.error(f"Erreur synchronisation externe: {e}")
+                return int(time.time() * 1000)  # Dernier recours
     
     def get_auth_url(self, success_url=None, callback_url=None):
-        """Effectue l'authentification et retourne l'URL ComptExpert"""
+        """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
+        
         # Test de validation HMAC avec l'exemple de la doc
         logger.info("=== TEST DE VALIDATION HMAC ===")
         if not self.test_hmac_function():
             raise Exception("ERREUR: Fonction HMAC défectueuse - Test de validation échoué")
+        logger.info("✅ Test HMAC réussi - Fonction correcte")
+        logger.info("=== FIN TEST HMAC ===")
         
-        # Test de connectivité
-        if not self.test_connectivity():
-            raise Exception("ERREUR: Impossible de joindre le serveur ECMA")
-        
-        # Génération des paramètres d'authentification
+        # Génération des paramètres
         id_request = self.generate_id_request()
-        timestamp = self.get_timestamp_fixed()  # Utilise la nouvelle méthode
+        timestamp = self.get_timestamp()
         hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"
-        hmac_signature = self.generate_hmac(hmac_data)
         
-        # URL de l'endpoint d'authentification
-        auth_url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/{id_request}/{hmac_signature}?ts={timestamp}"
-        
-        # Logs de diagnostic
+        # Logs détaillés pour diagnostic
+        logger.info("=== PARAMÈTRES D'AUTHENTIFICATION ===")
+        logger.info(f"Base URL: {self.base_url}")
         logger.info(f"Shortcut: {self.shortcut}")
-        logger.info(f"idRequest: {id_request}")
+        logger.info(f"Secret: {self.secret[:5]}{'*' * (len(self.secret)-5)}")  # Partiellement masqué
+        logger.info(f"ID Request: {id_request}")
         logger.info(f"Timestamp: {timestamp}")
-        logger.info(f"Secret (premiers 10 chars): {self.secret[:10]}...")
         logger.info(f"HMAC data: {hmac_data}")
-        logger.info(f"HMAC: {hmac_signature}")
-        logger.info(f"URL auth: {auth_url}")
+        
+        hmac_signature = self.generate_hmac(hmac_data)
+        logger.info(f"HMAC généré: {hmac_signature}")
+        
+        # URL de l'endpoint ECMA pour POST
+        url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/{id_request}/{hmac_signature}?ts={timestamp}"
+        logger.info(f"URL POST: {url}")
+        
+        # Body JSON comme requis par la doc ECMA
+        payload = {}
+        if success_url:
+            payload['success_url'] = success_url
+        if callback_url:
+            payload['callback_url'] = callback_url
+        payload['generate_hmac'] = True
+        
+        logger.info(f"Payload: {json.dumps(payload, indent=2)}")
+        
+        # Stocker l'idRequest en session
+        session['auth_id_request'] = id_request
+        session['auth_timestamp'] = timestamp
+        session['auth_hmac'] = hmac_signature
         
         try:
-            # Effectuer l'appel POST (CORRECTION PRINCIPALE)
-            logger.info("=== APPEL POST VERS L'API D'AUTHENTIFICATION ===")
-            
-            # Payload pour l'authentification
-            auth_payload = {}
-            if success_url:
-                auth_payload['success_url'] = success_url
-            if callback_url:
-                auth_payload['callback_url'] = callback_url
-            
-            response = requests.post(auth_url, json=auth_payload, timeout=30)
+            # POST vers ECMA comme requis par la documentation
+            logger.info("=== APPEL API ECMA ===")
+            response = requests.post(
+                url, 
+                json=payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
             
             logger.info(f"Status code: {response.status_code}")
-            logger.info(f"Headers de réponse: {dict(response.headers)}")
-            logger.info(f"Contenu de réponse: {response.text}")
-            
-            if response.status_code == 404:
-                raise Exception("L'endpoint d'authentification n'existe pas. Vérifiez l'URL et la documentation.")
+            logger.info(f"Response headers: {dict(response.headers)}")
+            logger.info(f"Response content: {response.text[:500]}")
             
             if response.status_code == 400:
-                try:
-                    error_data = response.json()
-                    if "Le hmac est incorrect" in error_data.get('details', ''):
-                        raise Exception("HMAC incorrect - Vérifiez votre secret ECMA et l'heure système")
-                    else:
-                        raise Exception(f"Erreur API: {error_data}")
-                except json.JSONDecodeError:
-                    raise Exception(f"Erreur 400: {response.text}")
+                logger.error("ERREUR 400 - Vérifiez:")
+                logger.error("1. Que votre shortcut est correct")
+                logger.error("2. Que votre secret est correct (pas d'espaces)")
+                logger.error("3. Que le timestamp est dans la fenêtre ±5 minutes")
+                raise Exception(f"Erreur 400 HMAC incorrect: {response.text}")
             
-            if response.status_code == 403:
-                raise Exception("Accès refusé - Vérifiez vos credentials ECMA")
+            if response.status_code == 404:
+                logger.error("ERREUR 404 - URL ou endpoint incorrect")
+                logger.error("Vérifiez que l'URL de base est correcte")
+                raise Exception(f"Erreur 404 Not Found: {response.text}")
             
             if not response.ok:
-                raise Exception(f"Erreur HTTP {response.status_code}: {response.text}")
+                logger.error(f"Erreur ECMA: {response.status_code} - {response.text}")
+                raise Exception(f"Erreur API ECMA: {response.status_code} - {response.text}")
             
-            # Traiter la réponse JSON
-            try:
-                auth_data = response.json()
-            except json.JSONDecodeError:
-                raise Exception("Réponse non-JSON reçue de l'API d'authentification")
+            # ECMA devrait retourner l'URL d'authentification à utiliser
+            auth_data = response.json()
+            auth_url = auth_data.get('url') or auth_data.get('authUrl') or auth_data.get('redirectUrl')
             
-            # L'API devrait retourner une URL vers ComptExpert
-            if 'url' in auth_data:
-                comptexpert_url = auth_data['url']
-                logger.info(f"URL ComptExpert reçue: {comptexpert_url}")
-                
-                # Stocker les informations d'authentification en session
-                session['auth_id_request'] = id_request
-                session['auth_timestamp'] = str(timestamp)
-                session['auth_hmac'] = hmac_signature
-                session['success_url'] = success_url
-                
-                return comptexpert_url
-            else:
-                # Si pas d'URL, peut-être que les tokens sont directement dans la réponse
-                logger.info("Pas d'URL dans la réponse, vérification des tokens...")
-                if 'office' in auth_data and 'user' in auth_data:
-                    # Tokens reçus directement
-                    logger.info("Tokens reçus directement dans la réponse")
-                    return auth_data
-                else:
-                    raise Exception(f"Réponse inattendue de l'API: {auth_data}")
-                    
-        except requests.exceptions.Timeout:
-            raise Exception("Timeout lors de l'appel à l'API d'authentification")
-        except requests.exceptions.ConnectionError:
-            raise Exception("Erreur de connexion à l'API d'authentification")
+            if not auth_url:
+                logger.warning("ECMA n'a pas retourné d'URL, construction manuelle")
+                auth_url = url
+            
+            logger.info(f"✅ URL d'authentification obtenue: {auth_url}")
+            return auth_url
+            
         except requests.exceptions.RequestException as e:
-            raise Exception(f"Erreur réseau: {e}")
-        
-    def get_timestamp_fixed(self):
-        """Force un timestamp pour 02/09/2025 21:58:00 UTC (23:58 heure française)"""
-        # Timestamp calculé pour 02/09/2025 21:58:00 UTC
-        fixed_timestamp = 1725319080000
-        
-        logger.info(f"Timestamp forcé: {fixed_timestamp} ms")
-        logger.info(f"Date correspondante: 02/09/2025 21:58:00 UTC (23:58:00 CET)")
-        
-        return fixed_timestamp
-
-    def fetch_tokens(self):
-        """Récupère les tokens après callback"""
-        id_request = session.get('auth_id_request')
-        timestamp = session.get('auth_timestamp')
-        hmac_value = session.get('auth_hmac')
-        
-        if not all([id_request, timestamp, hmac_value]):
-            raise Exception("Données d'authentification manquantes dans la session")
-        
-        url = (
-            f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/"
-            f"{id_request}/{hmac_value}?ts={timestamp}"
-        )
-        
-        data = {
-            'success_url': session.get('success_url'),
-            'generate_hmac': True
-        }
-        
-        response = requests.post(url, json=data)
-        logger.info(f"Fetch tokens: {response.status_code} - {response.text}")
-        
-        if not response.ok:
-            raise Exception(f"Erreur récupération tokens: {response.status_code} - {response.text}")
-        
-        return response.json()
+            logger.error(f"Erreur réseau vers ECMA: {e}")
+            raise Exception(f"Impossible de contacter ECMA: {e}")
+        except Exception as e:
+            logger.error(f"Erreur lors de l'obtention de l'URL d'auth: {e}")
+            raise
     
-
+    def fetch_tokens(self):
+        """Récupère les tokens après authentification"""
+        if not all(k in session for k in ['auth_id_request', 'auth_timestamp', 'auth_hmac']):
+            raise Exception("Aucune session d'authentification trouvée")
+        
+        id_request = session['auth_id_request']
+        timestamp = session['auth_timestamp']
+        hmac_signature = session['auth_hmac']
+        
+        url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/fetch/{id_request}/{hmac_signature}?ts={timestamp}"
+        
+        try:
+            logger.info(f"Récupération des tokens: {url}")
+            response = requests.get(url, timeout=30)
+            
+            logger.info(f"Status: {response.status_code}")
+            logger.info(f"Response: {response.text[:500]}")
+            
+            if response.status_code == 404:
+                raise Exception("Session d'authentification expirée. Veuillez recommencer.")
+            
+            if not response.ok:
+                raise Exception(f"Erreur API: {response.status_code} - {response.text}")
+            
+            tokens = response.json()
+            logger.info("✅ Tokens récupérés avec succès")
+            return tokens
+            
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Erreur de connexion à ECMA: {e}")
     
     def make_api_call(self, endpoint, method='GET', data=None, files=None):
         """Effectue un appel API avec les tokens stockés en session"""
@@ -330,6 +338,7 @@ class EcmaApiClient:
             'JSE-EDITOR-TOKEN-OFFICE': session['tokens']['office']['token']
         }
         
+        # Ajouter le token utilisateur s'il existe
         if 'user' in session['tokens'] and session['tokens']['user'].get('token'):
             headers['JSE-EDITOR-TOKEN-USER'] = session['tokens']['user']['token']
         
@@ -346,12 +355,6 @@ class EcmaApiClient:
             data=data,
             files=files
         )
-        
-        logger.info(f"Headers envoyés: {dict((k, v[:20] + '...' if len(v) > 20 else v) for k, v in headers.items())}")
-        
-        if response.status_code == 403:
-            logger.error("Erreur 403: Tokens invalides ou révoqués")
-            raise Exception("Tokens invalides. Veuillez vous réauthentifier.")
         
         if not response.ok:
             logger.error(f"API Error: {response.status_code} - {response.text}")
@@ -372,7 +375,7 @@ def initialize_app():
             ECMA_CONFIG['shortcut'],
             ECMA_CONFIG['secret']
         )
-        logger.info("Client ECMA initialisé")
+        logger.info("🚀 Client ECMA initialisé")
 
 # Initialiser au démarrage
 with app.app_context():
@@ -383,14 +386,14 @@ with app.app_context():
 def init_db():
     """Initialise la base de données"""
     db.create_all()
-    print("Base de données initialisée")
+    print("✅ Base de données initialisée")
 
 @app.cli.command()
 def reset_db():
     """Remet à zéro la base de données"""
     db.drop_all()
     db.create_all()
-    print("Base de données réinitialisée")
+    print("✅ Base de données réinitialisée")
 
 # Routes
 @app.route('/', methods=['GET', 'POST'])
@@ -423,7 +426,7 @@ def configure():
         secret
     )
     
-    logger.info("Configuration ECMA mise à jour")
+    logger.info("🔧 Configuration ECMA mise à jour")
     flash('Configuration ECMA mise à jour avec succès', 'success')
     return redirect(url_for('index'))
 
@@ -435,6 +438,7 @@ def authenticate():
         return redirect(url_for('index'))
     
     try:
+        # Forcer HTTPS pour les callbacks en production
         if os.getenv('FLASK_ENV') == 'production':
             callback_base = f"https://{request.host}"
         else:
@@ -442,24 +446,13 @@ def authenticate():
         
         success_url = f"{callback_base}{url_for('auth_callback')}"
         
-        # CORRECTION: get_auth_url fait maintenant l'appel POST et retourne l'URL ComptExpert
-        result = ecma_client.get_auth_url(success_url=success_url)
+        auth_url = ecma_client.get_auth_url(success_url=success_url)
         
-        if isinstance(result, dict) and 'office' in result:
-            # Tokens reçus directement, pas besoin de redirection
-            session['tokens'] = result
-            office_name = result.get('office', {}).get('name', 'Cabinet inconnu')
-            flash(f'Authentification directe réussie ! Cabinet: {office_name}', 'success')
-            return redirect(url_for('index'))
-        elif isinstance(result, str):
-            # URL ComptExpert reçue, rediriger l'utilisateur
-            logger.info(f"Redirection vers ComptExpert: {result}")
-            return redirect(result)
-        else:
-            raise Exception(f"Réponse inattendue: {result}")
+        logger.info(f"🔀 Redirection vers: {auth_url}")
+        return redirect(auth_url)
         
     except Exception as e:
-        logger.error(f"Erreur authentification: {e}")
+        logger.error(f"⚠ Erreur authentification: {e}")
         flash(f'Erreur d\'authentification: {e}', 'error')
         return redirect(url_for('index'))
 
@@ -482,6 +475,7 @@ def auth_callback():
         
         session['tokens'] = tokens
         
+        # Nettoyer les données d'auth temporaires
         for key in ['auth_id_request', 'auth_timestamp', 'auth_hmac']:
             session.pop(key, None)
         
@@ -490,9 +484,10 @@ def auth_callback():
         return redirect(url_for('index'))
         
     except Exception as e:
-        logger.error(f"Erreur récupération tokens: {e}")
+        logger.error(f"❌ Erreur récupération tokens: {e}")
         flash(f'Erreur lors de l\'authentification: {e}', 'error')
         
+        # Nettoyer la session en cas d'erreur
         for key in ['auth_id_request', 'auth_timestamp', 'auth_hmac']:
             session.pop(key, None)
             
@@ -517,11 +512,12 @@ def init_transaction():
         return jsonify({'error': 'Client non configuré'}), 400
     
     try:
+        # Format selon la documentation JeSignExpert section 4.1.1
         transaction_data = {
-            'object': request.json.get('name', 'Transaction de test')[:45],
+            'object': request.json.get('name', 'Transaction de test')[:45],  # Max 45 chars
             'message': request.json.get('message', 'Transaction créée depuis l\'API Python')[:4000],
-            'mailSender': session.get('tokens', {}).get('office', {}).get('name', 'Cabinet Expert')[:100],
-            'mailSubject': f"Demande de signature - {request.json.get('name', 'Document')}"[:100],
+            'mailSender': 'Cabinet Expert',
+            'mailSubject': f"Demande de signature - {request.json.get('name', 'Document')}",
             'notification': 'ALL',
             'locked': request.json.get('locked', True),
             'invitationMode': request.json.get('invitationMode', 'sequential'),
@@ -529,8 +525,9 @@ def init_transaction():
             'signatureRequirementMode': 'ALL'
         }
         
+        # Ajouter confidentialité si spécifiée
         if request.json.get('confidential', False):
-            transaction_data['confidentiality'] = []
+            transaction_data['confidentiality'] = []  # Vide pour non confidentiel, ou emails pour confidentiel
         
         response = ecma_client.make_api_call(
             f'/editor/{ECMA_CONFIG["shortcut"]}/transaction',
@@ -538,6 +535,7 @@ def init_transaction():
             data=transaction_data
         )
         
+        # Sauvegarder en BDD
         try:
             trans = Transaction(
                 id=response.get('id', str(uuid.uuid4())),
@@ -554,6 +552,7 @@ def init_transaction():
         except Exception as db_error:
             logger.error(f"Erreur sauvegarde BDD: {db_error}")
         
+        # Stocker en session
         session['current_transaction'] = response
         transactions = session.get('transactions', [])
         transactions.append(response)
@@ -576,7 +575,7 @@ def add_signatory(transaction_id):
             'email': request.json.get('email'),
             'name': request.json.get('name'),
             'level': int(request.json.get('level', 1)),
-            'isHandwrittenSignatureActive': request.json.get('grigri', True),
+            'grigri': request.json.get('grigri', False),
             'positions': request.json.get('positions', [])
         }
         
@@ -689,4 +688,3 @@ if __name__ == '__main__':
     print("=" * 60)
     
     app.run(host=host, port=port, debug=debug)
-
