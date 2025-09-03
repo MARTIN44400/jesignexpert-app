@@ -169,39 +169,36 @@ class EcmaApiClient:
         ).hexdigest()
         
     def get_timestamp(self):
-        """Retourne le timestamp Unix actuel en millisecondes, avec synchronisation si nécessaire"""
+        """
+        Retourne le timestamp Unix en millisecondes pour GMT+2 (heure de Paris)
+        Selon les instructions de JeSignExpert
+        """
         try:
-            # Timestamp système en millisecondes
-            system_timestamp = int(time.time() * 1000)
-            logger.info(f"Timestamp système OK: {system_timestamp} ms")
-            
-            # Vérification que le timestamp est cohérent (proche de septembre 2025)
-            # Timestamp attendu pour septembre 2025: environ 1725292800000
-            expected_min = 1720000000000  # Juillet 2024
-            expected_max = 1800000000000  # Novembre 2026
-            
-            if not (expected_min <= system_timestamp <= expected_max):
-                logger.warning(f"Timestamp suspect: {system_timestamp}, tentative de synchronisation externe")
-                raise Exception("Timestamp système incohérent")
-            
-            return system_timestamp
-            
+            # Obtenir l'heure UTC
+            resp = requests.get("http://worldtimeapi.org/api/timezone/Etc/UTC", timeout=10)
+            if resp.ok:
+                utc_timestamp = int(resp.json()["unixtime"])
+                # Ajouter 2 heures (7200 secondes) pour GMT+2
+                gmt_plus_2_timestamp = utc_timestamp + (2 * 3600)
+                timestamp_ms = gmt_plus_2_timestamp * 1000
+                
+                logger.info(f"[Timestamp] UTC: {utc_timestamp}")
+                logger.info(f"[Timestamp] GMT+2: {gmt_plus_2_timestamp}")
+                logger.info(f"[Timestamp] Final (ms): {timestamp_ms}")
+                
+                return timestamp_ms
+            else:
+                logger.error(f"[Timestamp] Erreur API externe: {resp.status_code}")
         except Exception as e:
-            logger.error(f"Erreur lors de l'obtention du timestamp système: {e}")
-            # Fallback : essayer une API externe
-            try:
-                response = requests.get('http://worldtimeapi.org/api/timezone/UTC', timeout=5)
-                if response.ok:
-                    time_data = response.json()
-                    external_timestamp = int(time_data['unixtime'] * 1000)  # Convertir en ms
-                    logger.info(f"Timestamp externe obtenu: {external_timestamp} ms")
-                    return external_timestamp
-                else:
-                    logger.error("Impossible d'obtenir l'heure externe, fallback système")
-                    return int(time.time() * 1000)
-            except Exception as e:
-                logger.error(f"Erreur synchronisation externe: {e}")
-                return int(time.time() * 1000)  # Dernier recours
+            logger.error(f"[Timestamp] Erreur synchro externe: {e}")
+        
+        # Fallback avec heure système + 2 heures
+        utc_time = int(time.time())
+        gmt_plus_2_time = utc_time + (2 * 3600)  # +2 heures
+        timestamp_ms = gmt_plus_2_time * 1000
+        
+        logger.warning(f"[Timestamp] Fallback GMT+2: {timestamp_ms}")
+        return timestamp_ms
     
     def get_auth_url(self, success_url=None, callback_url=None):
         """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
