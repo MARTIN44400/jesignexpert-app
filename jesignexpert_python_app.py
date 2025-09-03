@@ -1,3 +1,4 @@
+```python
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -18,6 +19,7 @@ import secrets
 import string
 import requests
 import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
@@ -76,8 +78,8 @@ class Transaction(db.Model):
     confidential = db.Column(db.Boolean, default=False)
     invitation_mode = db.Column(db.String(50), default='sequential')
     ecma_transaction_id = db.Column(db.String(100))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     user_email = db.Column(db.String(200))
     office_name = db.Column(db.String(200))
 
@@ -91,7 +93,7 @@ class Signatory(db.Model):
     name = db.Column(db.String(200), nullable=False)
     level = db.Column(db.Integer, default=1)
     status = db.Column(db.String(50), default='pending')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 # Vérification de la configuration
 def check_config():
@@ -476,3 +478,4 @@ if __name__ == '__main__':
     print("=" * 60)
     
     app.run(host=host, port=port, debug=debug)
+```
