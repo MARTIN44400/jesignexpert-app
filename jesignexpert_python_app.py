@@ -170,8 +170,8 @@ class EcmaApiClient:
         
     def get_timestamp(self):
         """
-        Retourne un timestamp correct en GMT+2 en utilisant les headers HTTP du serveur ECMA
-        Solution robuste qui évite les problèmes d'horloge système
+        Retourne un timestamp correct en UTC pur (GMT+0)
+        Solution robuste qui évite les problèmes d'horloge système et de fuseau horaire
         """
         try:
             # Utiliser l'heure du serveur ECMA lui-même via un simple HEAD request
@@ -181,52 +181,49 @@ class EcmaApiClient:
                 from email.utils import parsedate_to_datetime
                 server_time = parsedate_to_datetime(response.headers['Date'])
                 
-                # Convertir en timestamp Unix et ajouter 2 heures pour GMT+2
+                # Convertir en timestamp Unix UTC (pas de décalage)
                 utc_timestamp = int(server_time.timestamp())
-                gmt_plus_2_timestamp = utc_timestamp + (2 * 3600)  # +2 heures
-                timestamp_ms = gmt_plus_2_timestamp * 1000
+                timestamp_ms = utc_timestamp * 1000
                 
-                logger.info(f"[Timestamp] Heure serveur ECMA: {response.headers['Date']}")
-                logger.info(f"[Timestamp] UTC timestamp: {utc_timestamp}")
-                logger.info(f"[Timestamp] GMT+2 timestamp: {gmt_plus_2_timestamp}")
-                logger.info(f"[Timestamp] Final (ms): {timestamp_ms}")
+                logger.info(f"[Timestamp UTC] Heure serveur ECMA: {response.headers['Date']}")
+                logger.info(f"[Timestamp UTC] UTC timestamp: {utc_timestamp}")
+                logger.info(f"[Timestamp UTC] Final (ms): {timestamp_ms}")
                 
                 return timestamp_ms
             else:
-                logger.error(f"[Timestamp] Impossible de récupérer l'heure du serveur ECMA")
+                logger.error(f"[Timestamp UTC] Impossible de récupérer l'heure du serveur ECMA")
         except Exception as e:
-            logger.error(f"[Timestamp] Erreur récupération heure serveur ECMA: {e}")
+            logger.error(f"[Timestamp UTC] Erreur récupération heure serveur ECMA: {e}")
         
         try:
-            # Fallback avec WorldTimeAPI pour l'Europe/Paris (GMT+2)
-            response = requests.get("http://worldtimeapi.org/api/timezone/Europe/Paris", timeout=10)
+            # Fallback avec WorldTimeAPI pour UTC
+            response = requests.get("http://worldtimeapi.org/api/timezone/UTC", timeout=10)
             if response.ok:
-                paris_timestamp = int(response.json()["unixtime"])
-                timestamp_ms = paris_timestamp * 1000
+                utc_timestamp = int(response.json()["unixtime"])
+                timestamp_ms = utc_timestamp * 1000
                 
-                logger.info(f"[Timestamp] Heure Paris (WorldTimeAPI): {paris_timestamp}")
-                logger.info(f"[Timestamp] Final (ms): {timestamp_ms}")
+                logger.info(f"[Timestamp UTC] Heure UTC (WorldTimeAPI): {utc_timestamp}")
+                logger.info(f"[Timestamp UTC] Final (ms): {timestamp_ms}")
                 
                 return timestamp_ms
             else:
-                logger.error(f"[Timestamp] Erreur WorldTimeAPI Europe/Paris: {response.status_code}")
+                logger.error(f"[Timestamp UTC] Erreur WorldTimeAPI UTC: {response.status_code}")
         except Exception as e:
-            logger.error(f"[Timestamp] Erreur WorldTimeAPI: {e}")
+            logger.error(f"[Timestamp UTC] Erreur WorldTimeAPI: {e}")
         
         # Dernière option : utiliser l'heure système mais corriger le décalage observé
-        # Décalage observé : ~31.5 millions de ms (environ 4 mois)
+        # Décalage observé : ~31.5 millions de ms (environ 1 an)
         system_time = int(time.time())
-        # Soustraire le décalage observé (31539513 secondes ≈ 4 mois)
+        # Soustraire le décalage observé (31539513 secondes ≈ 1 an)
         corrected_time = system_time - 31539513
-        # Ajouter 2 heures pour GMT+2
-        gmt_plus_2_time = corrected_time + (2 * 3600)
-        timestamp_ms = gmt_plus_2_time * 1000
+        timestamp_ms = corrected_time * 1000
         
-        logger.warning(f"[Timestamp] Fallback système corrigé GMT+2: {timestamp_ms}")
-        logger.warning(f"[Timestamp] Correction appliquée: -31539513 secondes")
+        logger.warning(f"[Timestamp UTC] Fallback système corrigé UTC: {timestamp_ms}")
+        logger.warning(f"[Timestamp UTC] Correction appliquée: -31539513 secondes")
+        logger.warning(f"[Timestamp UTC] Date correspondante: {datetime.fromtimestamp(corrected_time).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         
         return timestamp_ms
-    
+        
     def get_auth_url(self, success_url=None, callback_url=None):
         """Génère l'URL d'authentification en effectuant un POST vers ECMA"""
         
