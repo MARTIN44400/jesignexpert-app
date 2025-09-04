@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+
+{% block title %}Gestion de documents - JeSignExpert{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="bi bi-file-earmark-arrow-up"></i> Envoi et signature de documents
+        </h1>
+    </div>
+</div>
+
+{% if not tokens %}
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i>
+        Vous devez d'abord vous <a href="{{ url_for('authenticate') }}">authentifier</a> pour envoyer des documents.
+    </div>
+{% else %}
+
+<!-- Workflow d'envoi de document -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-send"></i> Envoyer un document à signer
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="documentSendForm" enctype="multipart/form-data">
+                    <!-- Étape 1: Informations transaction -->
+                    <div class="step-section" id="step1">
+                        <h6 class="border-bottom pb-2 mb-3">
+                            <span class="badge bg-primary me-2">1</span>
+                            Informations de la demande
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="transactionName" class="form-label">Objet de la demande *</label>
+                                    <input type="text" class="form-control" id="transactionName" name="name" required maxlength="45">
+                                    <div class="form-text">Maximum 45 caractères</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="transactionMessage" class="form-label">Message</label>
+                                    <textarea class="form-control" id="transactionMessage" name="message" rows="3" maxlength="4000">Merci de signer ce document.</textarea>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="invitationMode" class="form-label">Mode de signature</label>
+                                    <select class="form-select" id="invitationMode" name="invitationMode">
+                                        <option value="sequential">Séquentielle (un après l'autre)</option>
+                                        <option value="parallel">Parallèle (tous en même temps)</option>
+                                    </select>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="locked" name="locked" checked>
+                                    <label class="form-check-label" for="locked">
+                                        Verrouiller le document après signature
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Étape 2: Upload de document -->
+                    <div class="step-section" id="step2">
+                        <h6 class="border-bottom pb-2 mb-3">
+                            <span class="badge bg-primary me-2">2</span>
+                            Document à signer
+                        </h6>
+                        <div class="mb-3">
+                            <label for="documentFile" class="form-label">Fichier PDF *</label>
+                            <input type="file" class="form-control" id="documentFile" name="file" accept=".pdf" required>
+                            <div class="form-text">Formats acceptés: PDF uniquement, maximum 15 Mo</div>
+                        </div>
+                        <div id="filePreview" class="d-none">
+                            <div class="alert alert-info">
+                                <i class="bi bi-file-earmark-pdf"></i>
+                                <strong>Fichier sélectionné:</strong> <span id="fileName"></span>
+                                (<span id="fileSize"></span>)
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Étape 3: Signataires -->
+                    <div class="step-section" id="step3">
+                        <h6 class="border-bottom pb-2 mb-3">
+                            <span class="badge bg-primary me-2">3</span>
+                            Signataires
+                        </h6>
+                        <div id="signatariesContainer">
+                            <!-- Les signataires seront ajoutés dynamiquement -->
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addSignatory()">
+                            <i class="bi bi-plus"></i> Ajouter un signataire
+                        </button>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                            <i class="bi bi-arrow-clockwise"></i> Recommencer
+                        </button>
+                        <div>
+                            <button type="button" class="btn btn-outline-primary" onclick="saveDraft()">
+                                <i class="bi bi-save"></i> Sauver brouillon
+                            </button>
+                            <button type="button" class="btn btn-success" onclick="sendDocument()">
+                                <i class="bi bi-send"></i> Envoyer pour signature
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Documents envoyés -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-inbox"></i> Documents en cours
+                </h5>
+                <button class="btn btn-outline-primary btn-sm" onclick="refreshDocuments()">
+                    <i class="bi bi-arrow-clockwise"></i> Actualiser
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="documentsContainer">
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-hourglass-split display-4"></i>
+                        <p class="mt-2">Chargement des documents...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+<!-- Modal de progression -->
+<div class="modal fade" id="progressModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Envoi en cours...</h5>
+            </div>
+            <div class="modal-body">
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" style="width: 0%"></div>
+                </div>
+                <p id="progressText">Initialisation...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let signatoryCounter = 0;
+let currentTransactionId = null;
+
+// Ajouter un signataire
+function addSignatory() {
+    signatoryCounter++;
+    const container = document.getElementById('signatariesContainer');
+    const signatoryDiv = document.createElement('div');
+    signatoryDiv.className = 'signatory-item border rounded p-3 mb-3';
+    signatoryDiv.innerHTML = `
+        <div class="row">
+            <div class="col-md-4">
+                <label class="form-label">Nom complet *</label>
+                <input type="text" class="form-control signatory-name" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Email *</label>
+                <input type="email" class="form-control signatory-email" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Niveau</label>
+                <select class="form-select signatory-level">
+                    <option value="1">1 (Premier)</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                </select>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSignatory(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    container.appendChild(signatoryDiv);
+}
+
+function removeSignatory(button) {
+    button.closest('.signatory-item').remove();
+}
+
+// Gestion du fichier
+document.getElementById('documentFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const preview = document.getElementById('filePreview');
+    
+    if (file) {
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' Mo';
+        preview.classList.remove('d-none');
+    } else {
+        preview.classList.add('d-none');
+    }
+});
+
+// Envoyer le document
+async function sendDocument() {
+    try {
+        const form = document.getElementById('documentSendForm');
+        const formData = new FormData(form);
+        
+        // Validation
+        if (!validateForm()) return;
+        
+        showProgress('Création de la transaction...', 20);
+        
+        // 1. Créer la transaction
+        const transactionData = {
+            name: formData.get('name'),
+            message: formData.get('message'),
+            invitationMode: formData.get('invitationMode'),
+            locked: formData.has('locked')
+        };
+        
+        const transactionResponse = await fetch('/transaction/init', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(transactionData)
+        });
+        
+        const transaction = await transactionResponse.json();
+        if (transaction.error) throw new Error(transaction.error);
+        
+        currentTransactionId = transaction.id;
+        showProgress('Envoi du document...', 40);
+        
+        // 2. Ajouter le document
+        const fileData = new FormData();
+        fileData.append('file', document.getElementById('documentFile').files[0]);
+        
+        const documentResponse = await fetch(`/transaction/${transaction.id}/document`, {
+            method: 'POST',
+            body: fileData
+        });
+        
+        const documentResult = await documentResponse.json();
+        if (documentResult.error) throw new Error(documentResult.error);
+        
+        showProgress('Ajout des signataires...', 60);
+        
+        // 3. Ajouter les signataires
+        const signatories = getSignatories();
+        for (let i = 0; i < signatories.length; i++) {
+            const signatoryResponse = await fetch(`/transaction/${transaction.id}/signatory`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(signatories[i])
+            });
+            
+            const signatoryResult = await signatoryResponse.json();
+            if (signatoryResult.error) throw new Error(signatoryResult.error);
+            
+            showProgress(`Signataire ${i + 1}/${signatories.length} ajouté...`, 60 + (i + 1) * 10);
+        }
+        
+        showProgress('Envoi de la demande...', 90);
+        
+        // 4. Envoyer la transaction
+        const sendResponse = await fetch(`/transaction/${transaction.id}/send`, {
+            method: 'POST'
+        });
+        
+        const sendResult = await sendResponse.json();
+        if (sendResult.error) throw new Error(sendResult.error);
+        
+        showProgress('Terminé !', 100);
+        
+        setTimeout(() => {
+            hideProgress();
+            alert('Document envoyé avec succès !');
+            resetForm();
+            refreshDocuments();
+        }, 1000);
+        
+    } catch (error) {
+        hideProgress();
+        alert('Erreur: ' + error.message);
+    }
+}
+
+function saveDraft() {
+    // Implémentation similaire mais appel à /transaction/{id}/draft
+    alert('Fonctionnalité brouillon à implémenter');
+}
+
+function validateForm() {
+    const name = document.getElementById('transactionName').value.trim();
+    const file = document.getElementById('documentFile').files[0];
+    const signatories = getSignatories();
+    
+    if (!name) {
+        alert('Veuillez saisir un objet pour la demande');
+        return false;
+    }
+    
+    if (!file) {
+        alert('Veuillez sélectionner un fichier PDF');
+        return false;
+    }
+    
+    if (signatories.length === 0) {
+        alert('Veuillez ajouter au moins un signataire');
+        return false;
+    }
+    
+    return true;
+}
+
+function getSignatories() {
+    const signatories = [];
+    const items = document.querySelectorAll('.signatory-item');
+    
+    items.forEach(item => {
+        const name = item.querySelector('.signatory-name').value.trim();
+        const email = item.querySelector('.signatory-email').value.trim();
+        const level = parseInt(item.querySelector('.signatory-level').value);
+        
+        if (name && email) {
+            signatories.push({ name, email, level });
+        }
+    });
+    
+    return signatories;
+}
+
+function showProgress(text, percent) {
+    document.getElementById('progressText').textContent = text;
+    document.getElementById('progressBar').style.width = percent + '%';
+    const modal = new bootstrap.Modal(document.getElementById('progressModal'));
+    modal.show();
+}
+
+function hideProgress() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('progressModal'));
+    if (modal) modal.hide();
+}
+
+function resetForm() {
+    document.getElementById('documentSendForm').reset();
+    document.getElementById('signatariesContainer').innerHTML = '';
+    document.getElementById('filePreview').classList.add('d-none');
+    signatoryCounter = 0;
+    addSignatory(); // Ajouter un signataire par défaut
+}
+
+function refreshDocuments() {
+    // Charger la liste des documents
+    document.getElementById('documentsContainer').innerHTML = `
+        <div class="text-center text-muted py-4">
+            <i class="bi bi-arrow-clockwise spin-animation"></i>
+            <p class="mt-2">Actualisation...</p>
+        </div>
+    `;
+    
+    // Simuler le chargement (à remplacer par un vrai appel API)
+    setTimeout(() => {
+        document.getElementById('documentsContainer').innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="bi bi-inbox display-4"></i>
+                <p class="mt-2">Aucun document en cours</p>
+                <small>Les documents envoyés apparaîtront ici</small>
+            </div>
+        `;
+    }, 1000);
+}
+
+// Initialisation
+document.addEventListener('DOMContentLoaded', function() {
+    addSignatory(); // Ajouter un signataire par défaut
+    refreshDocuments();
+});
+</script>
+
+<style>
+.step-section {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+}
+
+.signatory-item {
+    background-color: #f8f9fa;
+}
+
+.spin-animation {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+</style>
+{% endblock %}

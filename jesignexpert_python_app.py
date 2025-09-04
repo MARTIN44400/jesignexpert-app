@@ -63,7 +63,241 @@ logger = logging.getLogger(__name__)
 
 # Créer le dossier uploads s'il n'existe pas
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Ajoutez ces imports en haut de votre fichier jesignexpert_python_app.py
+# (après vos imports existants)
 
+# Ajoutez ces routes dans votre fichier jesignexpert_python_app.py
+
+@app.route('/send-document-workflow', methods=['POST'])
+def send_document_workflow():
+    """Workflow complet d'envoi de document (Transaction + Upload + Signataires + Envoi)"""
+    if not ecma_client:
+        return jsonify({'error': 'Client non configuré'}), 400
+    
+    if 'tokens' not in session:
+        return jsonify({'error': 'Pas de tokens. Authentifiez-vous d\'abord.'}), 401
+    
+    try:
+        # Récupérer les données JSON du formulaire
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'Données manquantes'}), 400
+        
+        # 1. Créer la transaction
+        transaction_data = {
+            'object': data.get('object', '')[:45],
+            'message': data.get('message', 'Document à signer')[:4000],
+            'mailSender': session.get('tokens', {}).get('office', {}).get('name', 'Cabinet')[:100],
+            'mailSubject': f"Signature - {data.get('object', 'Document')}"[:100],
+            'notification': 'ALL',
+            'locked': data.get('locked', True),
+            'invitationMode': data.get('invitationMode', 'sequential'),
+            'signatureRequirementMode': 'ALL'
+        }
+        
+        logger.info(f"Création transaction workflow: {transaction_data['object']}")
+        
+        # Utiliser votre endpoint existant
+        transaction_response = requests.post(
+            f"{request.host_url.rstrip('/')}/transaction/init",
+            headers={'Content-Type': 'application/json'},
+            json=transaction_data,
+            cookies=request.cookies  # Transmettre la session
+        )
+        
+        if not transaction_response.ok:
+            raise Exception(f"Erreur création transaction: {transaction_response.text}")
+        
+        transaction = transaction_response.json()
+        transaction_id = transaction.get('id')
+        
+        if not transaction_id:
+            raise Exception("Aucun ID de transaction reçu")
+        
+        return jsonify({
+            'success': True,
+            'transaction_id': transaction_id,
+            'message': f'Transaction créée: {transaction_id}',
+            'next_step': 'upload_document'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erreur workflow envoi: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/transaction/<transaction_id>/upload-with-positions', methods=['POST'])
+def upload_document_with_positions(transaction_id):
+    """Upload de document avec positions de signatures automatiques"""
+    if not ecma_client:
+        return jsonify({'error': 'Client non configuré'}), 400
+    
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'Aucun fichier fourni'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'Aucun fichier sélectionné'}), 400
+        
+        # Récupérer le nombre de signataires prévu
+        nb_signataires = int(request.form.get('nb_signataires', 1))
+        
+        # Générer positions automatiques
+        signature_positions = generate_signature_positions(nb_signataires)
+        
+        # Headers avec tokens
+        headers = {
+            'JSE-EDITOR-TOKEN-OFFICE': session['tokens']['office']['token']
+        }
+        
+        if 'user' in session['tokens'] and session['tokens']['user'].get('token'):
+            headers['JSE-EDITOR-TOKEN-USER'] = session['tokens']['user']['token']
+        
+        # Utiliser PUT selon la doc JeSignExpert
+        url = f"{ECMA_CONFIG['base_url']}/editor/{ECMA_CONFIG['shortcut']}/transaction/{transaction_id}/uploadFile/1"
+        
+        files_data = {
+            'file': (file.filename, file.stream, file.content_type)
+        }
+        
+        form_data = {
+            'SignFields': json.dumps(signature_positions)
+        }
+        
+        logger.info(f"Upload vers: {url}")
+        logger.info(f"Positions: {json.dumps(signature_positions)}")
+        
+        response = requests.put(
+            url,
+            headers=headers,
+            files=files_data,
+            data=form_data,
+            timeout=60
+        )
+        
+        logger.info(f"Upload status: {response.status_code}")
+        logger.info(f"Upload response: {response.text}")
+        
+        if not response.ok:
+            raise Exception(f"Erreur upload: {response.status_code} - {response.text}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Document uploadé avec succès',
+            'positions': signature_positions,
+            'result': response.json()
+        })
+        
+    except Exception as e:
+        logger.error(f"Erreur upload avec positions: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/transaction/<transaction_id>/add-signatories', methods=['POST'])
+def add_multiple_signatories(transaction_id):
+    """Ajouter plusieurs signataires en une fois"""
+    if not ecma_client:
+        return jsonify({'error': 'Client non configuré'}), 400
+    
+    try:
+        data = request.get_json()
+        signatories = data.get('signatories', [])
+        
+        if not signatories:
+            return jsonify({'error': 'Aucun signataire fourni'}), 400
+        
+        results = []
+        
+        for i, signatory in enumerate(signatories):
+            signatory_data = {
+                'name': signatory.get('name', ''),
+                'email': signatory.get('email', ''),
+                'level': signatory.get('level', i + 1),
+                'positions': signatory.get('positions', [])
+            }
+            
+            # Utiliser votre endpoint existant
+            signatory_response = requests.post(
+                f"{request.host_url.rstrip('/')}/transaction/{transaction_id}/signatory",
+                headers={'Content-Type': 'application/json'},
+                json=signatory_data,
+                cookies=request.cookies
+            )
+            
+            if signatory_response.ok:
+                results.append({
+                    'signatory': signatory_data['name'],
+                    'status': 'success'
+                })
+            else:
+                results.append({
+                    'signatory': signatory_data['name'],
+                    'status': 'error',
+                    'message': signatory_response.text
+                })
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len([r for r in results if r["status"] == "success"])} signataires ajoutés',
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"Erreur ajout signataires multiples: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+def generate_signature_positions(nb_signataires):
+    """
+    Génère automatiquement des positions de signatures sur le PDF
+    Positions compatibles A4 72 DPI (595x842 px)
+    """
+    positions = []
+    
+    start_y = 700  # Commencer en bas
+    spacing_y = 80  # Espacement vertical
+    
+    for i in range(nb_signataires):
+        position = {
+            "order": i + 1,
+            "positionX": 200,  # Centré horizontalement
+            "positionY": max(100, start_y - (i * spacing_y)),  # Éviter débordement
+            "page": -1,  # Dernière page (-1 = dernière page selon la doc)
+            "withoutLogo": False
+        }
+        positions.append(position)
+    
+    return positions
+
+
+@app.route('/transaction/<transaction_id>/complete-send', methods=['POST'])
+def complete_send_workflow(transaction_id):
+    """Finalise l'envoi de la transaction (après upload + signataires)"""
+    if not ecma_client:
+        return jsonify({'error': 'Client non configuré'}), 400
+    
+    try:
+        # Utiliser votre endpoint existant pour envoyer
+        send_response = requests.post(
+            f"{request.host_url.rstrip('/')}/transaction/{transaction_id}/send",
+            cookies=request.cookies
+        )
+        
+        if not send_response.ok:
+            raise Exception(f"Erreur envoi final: {send_response.text}")
+        
+        return jsonify({
+            'success': True,
+            'transaction_id': transaction_id,
+            'message': 'Transaction envoyée avec succès !',
+            'result': send_response.json()
+        })
+        
+    except Exception as e:
+        logger.error(f"Erreur envoi final: {e}")
+        return jsonify({'error': str(e)}), 400
 # Modèles de données
 class Transaction(db.Model):
     """Modèle pour stocker les transactions"""
@@ -596,7 +830,7 @@ def add_signatory(transaction_id):
 
 @app.route('/transaction/<transaction_id>/document', methods=['POST'])
 def add_document(transaction_id):
-    """Ajoute un document à la transaction"""
+    """Ajoute un document à la transaction (utilise PUT selon la doc)"""
     if not ecma_client:
         return jsonify({'error': 'Client non configuré'}), 400
     
@@ -608,22 +842,47 @@ def add_document(transaction_id):
         if file.filename == '':
             return jsonify({'error': 'Aucun fichier sélectionné'}), 400
         
-        files = {
+        # Positions de signatures automatiques
+        signature_positions = [
+            {
+                "order": 1,
+                "positionX": 200,
+                "positionY": 400,
+                "page": -1,
+                "withoutLogo": False
+            }
+        ]
+        
+        # Endpoint correct selon la doc : PUT uploadFile/{order}
+        url = f"{ecma_client.base_url}/editor/{ECMA_CONFIG['shortcut']}/transaction/{transaction_id}/uploadFile/1"
+        
+        headers = ecma_client._get_headers()  # Tokens d'auth
+        
+        files_data = {
             'file': (file.filename, file.stream, file.content_type)
         }
         
-        response = ecma_client.make_api_call(
-            f'/editor/{ECMA_CONFIG["shortcut"]}/transaction/{transaction_id}/document',
-            method='POST',
-            files=files
+        form_data = {
+            'SignFields': json.dumps(signature_positions)
+        }
+        
+        response = requests.put(
+            url,
+            headers=headers,
+            files=files_data,
+            data=form_data,
+            timeout=60
         )
         
-        return jsonify(response)
+        if not response.ok:
+            raise Exception(f"Erreur upload: {response.status_code} - {response.text}")
+        
+        return jsonify(response.json())
         
     except Exception as e:
         logger.error(f"Erreur ajout document: {e}")
         return jsonify({'error': str(e)}), 400
-
+    
 @app.route('/transaction/<transaction_id>/draft', methods=['POST'])
 def send_draft(transaction_id):
     """Envoie la transaction en mode brouillon"""

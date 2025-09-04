@@ -1,0 +1,609 @@
+{% extends "base.html" %}
+
+{% block title %}Envoi de document - JeSignExpert{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="bi bi-send-fill"></i> Envoi de document pour signature
+        </h1>
+    </div>
+</div>
+
+{% if not tokens %}
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i>
+        Vous devez d'abord vous <a href="{{ url_for('authenticate') }}" class="alert-link">authentifier</a> pour envoyer des documents.
+    </div>
+{% else %}
+
+<!-- Stepper -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="step-item active" id="step-info">
+                        <div class="step-circle">1</div>
+                        <small class="step-label">Informations</small>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step-item" id="step-document">
+                        <div class="step-circle">2</div>
+                        <small class="step-label">Document</small>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step-item" id="step-signatories">
+                        <div class="step-circle">3</div>
+                        <small class="step-label">Signataires</small>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step-item" id="step-send">
+                        <div class="step-circle">4</div>
+                        <small class="step-label">Envoi</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Formulaire principal -->
+<form id="documentForm" enctype="multipart/form-data">
+    
+    <!-- Étape 1: Informations -->
+    <div class="step-content active" id="content-info">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle"></i> Informations de la demande
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="documentTitle" class="form-label">Objet de la demande *</label>
+                            <input type="text" class="form-control" id="documentTitle" name="object" required maxlength="45">
+                            <div class="form-text">Maximum 45 caractères - Sera visible par tous les signataires</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="documentMessage" class="form-label">Message explicatif</label>
+                            <textarea class="form-control" id="documentMessage" name="message" rows="4" maxlength="4000" placeholder="Merci de bien vouloir signer ce document important..."></textarea>
+                            <div class="form-text">Ce message sera inclus dans l'email d'invitation</div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="invitationMode" class="form-label">Mode de signature</label>
+                            <select class="form-select" id="invitationMode" name="invitationMode">
+                                <option value="sequential">Séquentielle - Les signataires signent un par un dans l'ordre</option>
+                                <option value="parallel">Parallèle - Tous les signataires peuvent signer en même temps</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="locked" name="locked" checked>
+                            <label class="form-check-label" for="locked">
+                                <strong>Verrouiller le document après signature</strong>
+                            </label>
+                            <div class="form-text">Empêche toute modification du document une fois signé</div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-lightbulb"></i>
+                            <strong>Conseil :</strong> Utilisez un objet clair et un message explicatif pour faciliter la compréhension des signataires.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Étape 2: Document -->
+    <div class="step-content" id="content-document">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-file-earmark-pdf"></i> Sélection du document
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="mb-3">
+                            <label for="documentFile" class="form-label">Fichier PDF à signer *</label>
+                            <input type="file" class="form-control" id="documentFile" name="file" accept=".pdf" required>
+                            <div class="form-text">
+                                <strong>Formats acceptés :</strong> PDF uniquement<br>
+                                <strong>Taille maximale :</strong> 25 Mo<br>
+                                <strong>Note :</strong> Les positions de signature seront automatiquement placées en bas du document
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div id="filePreview" class="d-none">
+                            <div class="alert alert-success">
+                                <i class="bi bi-file-earmark-pdf-fill text-danger"></i>
+                                <div class="mt-2">
+                                    <strong>Fichier :</strong> <span id="fileName"></span><br>
+                                    <strong>Taille :</strong> <span id="fileSize"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Important :</strong> Les signatures seront automatiquement positionnées en bas de la dernière page du document. Assurez-vous qu'il y a suffisamment d'espace libre.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Étape 3: Signataires -->
+    <div class="step-content" id="content-signatories">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-people"></i> Liste des signataires
+                </h5>
+                <button type="button" class="btn btn-primary btn-sm" onclick="addSignatory()">
+                    <i class="bi bi-plus"></i> Ajouter
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="signatariesContainer">
+                    <!-- Les signataires seront ajoutés dynamiquement -->
+                </div>
+                
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Mode séquentiel :</strong> Le niveau détermine l'ordre de signature (1 = premier, 2 = deuxième, etc.)<br>
+                    <strong>Mode parallèle :</strong> Tous les signataires reçoivent l'invitation en même temps
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Étape 4: Récapitulatif et envoi -->
+    <div class="step-content" id="content-send">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-check-circle"></i> Récapitulatif et envoi
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="summary">
+                    <!-- Le récapitulatif sera généré automatiquement -->
+                </div>
+                
+                <div class="alert alert-success">
+                    <i class="bi bi-send"></i>
+                    <strong>Prêt à envoyer !</strong> 
+                    Une fois envoyé, tous les signataires recevront un email avec le lien pour signer le document.
+                </div>
+            </div>
+        </div>
+    </div>
+
+</form>
+
+<!-- Navigation -->
+<div class="d-flex justify-content-between mt-4">
+    <button type="button" class="btn btn-secondary" id="prevBtn" onclick="changeStep(-1)" style="display: none;">
+        <i class="bi bi-arrow-left"></i> Précédent
+    </button>
+    
+    <div class="ms-auto">
+        <button type="button" class="btn btn-primary" id="nextBtn" onclick="changeStep(1)">
+            Suivant <i class="bi bi-arrow-right"></i>
+        </button>
+        <button type="button" class="btn btn-success" id="sendBtn" onclick="sendDocument()" style="display: none;">
+            <i class="bi bi-send"></i> Envoyer le document
+        </button>
+    </div>
+</div>
+
+{% endif %}
+
+<!-- Modal de progression -->
+<div class="modal fade" id="progressModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-hourglass-split"></i> Envoi en cours...
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" style="width: 0%"></div>
+                </div>
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    <span id="progressText">Initialisation...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de succès -->
+<div class="modal fade" id="successModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-check-circle"></i> Document envoyé !
+                </h5>
+            </div>
+            <div class="modal-body">
+                <p>Votre document a été envoyé avec succès !</p>
+                <p><strong>ID de transaction :</strong> <code id="transactionId"></code></p>
+                <p>Les signataires vont recevoir un email avec les instructions pour signer.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="location.reload()">
+                    Envoyer un autre document
+                </button>
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                    Retour à l'accueil
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentStep = 1;
+let signatoryCounter = 0;
+let transactionData = {};
+
+// Gestion des étapes
+function changeStep(direction) {
+    if (direction === 1 && !validateCurrentStep()) return;
+    
+    currentStep += direction;
+    currentStep = Math.max(1, Math.min(4, currentStep));
+    
+    updateStepperUI();
+    showStepContent();
+    updateNavigationButtons();
+    
+    if (currentStep === 4) {
+        generateSummary();
+    }
+}
+
+function updateStepperUI() {
+    document.querySelectorAll('.step-item').forEach((step, index) => {
+        step.classList.toggle('active', index + 1 === currentStep);
+        step.classList.toggle('completed', index + 1 < currentStep);
+    });
+}
+
+function showStepContent() {
+    document.querySelectorAll('.step-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(`content-${['info', 'document', 'signatories', 'send'][currentStep - 1]}`).classList.add('active');
+}
+
+function updateNavigationButtons() {
+    document.getElementById('prevBtn').style.display = currentStep > 1 ? 'block' : 'none';
+    document.getElementById('nextBtn').style.display = currentStep < 4 ? 'block' : 'none';
+    document.getElementById('sendBtn').style.display = currentStep === 4 ? 'block' : 'none';
+}
+
+// Validation des étapes
+function validateCurrentStep() {
+    switch(currentStep) {
+        case 1:
+            const title = document.getElementById('documentTitle').value.trim();
+            if (!title) {
+                alert('Veuillez saisir un objet pour la demande');
+                return false;
+            }
+            break;
+        case 2:
+            const file = document.getElementById('documentFile').files[0];
+            if (!file) {
+                alert('Veuillez sélectionner un fichier PDF');
+                return false;
+            }
+            break;
+        case 3:
+            const signatories = getSignatories();
+            if (signatories.length === 0) {
+                alert('Veuillez ajouter au moins un signataire');
+                return false;
+            }
+            break;
+    }
+    return true;
+}
+
+// Gestion des signataires
+function addSignatory() {
+    signatoryCounter++;
+    const container = document.getElementById('signatariesContainer');
+    const signatoryDiv = document.createElement('div');
+    signatoryDiv.className = 'signatory-item card mb-3';
+    signatoryDiv.innerHTML = `
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label">Nom complet *</label>
+                    <input type="text" class="form-control signatory-name" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Adresse email *</label>
+                    <input type="email" class="form-control signatory-email" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Niveau de signature</label>
+                    <select class="form-select signatory-level">
+                        <option value="1">1 - Premier signataire</option>
+                        <option value="2">2 - Deuxième signataire</option>
+                        <option value="3">3 - Troisième signataire</option>
+                        <option value="4">4 - Quatrième signataire</option>
+                        <option value="5">5 - Cinquième signataire</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="button" class="btn btn-outline-danger" onclick="removeSignatory(this)" title="Supprimer">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(signatoryDiv);
+}
+
+function removeSignatory(button) {
+    button.closest('.signatory-item').remove();
+}
+
+function getSignatories() {
+    const signatories = [];
+    const items = document.querySelectorAll('.signatory-item');
+    
+    items.forEach(item => {
+        const name = item.querySelector('.signatory-name').value.trim();
+        const email = item.querySelector('.signatory-email').value.trim();
+        const level = parseInt(item.querySelector('.signatory-level').value);
+        
+        if (name && email) {
+            signatories.push({ name, email, level });
+        }
+    });
+    
+    return signatories;
+}
+
+// Récapitulatif
+function generateSummary() {
+    const title = document.getElementById('documentTitle').value;
+    const message = document.getElementById('documentMessage').value || 'Aucun message';
+    const invitationMode = document.getElementById('invitationMode').selectedOptions[0].text;
+    const locked = document.getElementById('locked').checked ? 'Oui' : 'Non';
+    const file = document.getElementById('documentFile').files[0];
+    const signatories = getSignatories();
+    
+    const summaryHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Document</h6>
+                <ul class="list-unstyled">
+                    <li><strong>Objet :</strong> ${title}</li>
+                    <li><strong>Fichier :</strong> ${file.name}</li>
+                    <li><strong>Taille :</strong> ${(file.size / 1024 / 1024).toFixed(2)} Mo</li>
+                    <li><strong>Mode :</strong> ${invitationMode}</li>
+                    <li><strong>Verrouillé :</strong> ${locked}</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6>Signataires (${signatories.length})</h6>
+                <ul class="list-unstyled">
+                    ${signatories.map(s => `<li><strong>Niveau ${s.level} :</strong> ${s.name} (${s.email})</li>`).join('')}
+                </ul>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12">
+                <h6>Message</h6>
+                <p class="text-muted">${message}</p>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('summary').innerHTML = summaryHTML;
+}
+
+// Envoi du document
+async function sendDocument() {
+    try {
+        showProgress('Préparation de l\'envoi...', 10);
+        
+        // 1. Créer la transaction
+        const documentInfo = {
+            object: document.getElementById('documentTitle').value,
+            message: document.getElementById('documentMessage').value,
+            invitationMode: document.getElementById('invitationMode').value,
+            locked: document.getElementById('locked').checked
+        };
+        
+        showProgress('Création de la transaction...', 25);
+        
+        const transactionResponse = await fetch('/send-document-workflow', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(documentInfo)
+        });
+        
+        const transactionResult = await transactionResponse.json();
+        if (!transactionResult.success) throw new Error(transactionResult.error);
+        
+        const transactionId = transactionResult.transaction_id;
+        
+        // 2. Upload du document
+        showProgress('Upload du document...', 50);
+        
+        const formData = new FormData();
+        formData.append('file', document.getElementById('documentFile').files[0]);
+        formData.append('nb_signataires', getSignatories().length);
+        
+        const uploadResponse = await fetch(`/transaction/${transactionId}/upload-with-positions`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const uploadResult = await uploadResponse.json();
+        if (!uploadResult.success) throw new Error(uploadResult.error);
+        
+        // 3. Ajouter les signataires
+        showProgress('Ajout des signataires...', 75);
+        
+        const signatariesResponse = await fetch(`/transaction/${transactionId}/add-signatories`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({signatories: getSignatories()})
+        });
+        
+        const signatariesResult = await signatariesResponse.json();
+        if (!signatariesResult.success) throw new Error(signatariesResult.error);
+        
+        // 4. Envoyer la transaction
+        showProgress('Envoi final...', 90);
+        
+        const sendResponse = await fetch(`/transaction/${transactionId}/complete-send`, {
+            method: 'POST'
+        });
+        
+        const sendResult = await sendResponse.json();
+        if (!sendResult.success) throw new Error(sendResult.error);
+        
+        showProgress('Terminé !', 100);
+        
+        // Afficher le succès
+        setTimeout(() => {
+            hideProgress();
+            document.getElementById('transactionId').textContent = transactionId;
+            const successModal = new bootstrap.Modal(document.getElementById('successModal'));
+            successModal.show();
+        }, 1000);
+        
+    } catch (error) {
+        hideProgress();
+        alert('Erreur lors de l\'envoi : ' + error.message);
+        console.error('Erreur:', error);
+    }
+}
+
+// Gestion de la progression
+function showProgress(text, percent) {
+    document.getElementById('progressText').textContent = text;
+    document.getElementById('progressBar').style.width = percent + '%';
+    const modal = new bootstrap.Modal(document.getElementById('progressModal'));
+    modal.show();
+}
+
+function hideProgress() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('progressModal'));
+    if (modal) modal.hide();
+}
+
+// Gestion du fichier
+document.getElementById('documentFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const preview = document.getElementById('filePreview');
+    
+    if (file) {
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' Mo';
+        preview.classList.remove('d-none');
+    } else {
+        preview.classList.add('d-none');
+    }
+});
+
+// Initialisation
+document.addEventListener('DOMContentLoaded', function() {
+    addSignatory(); // Ajouter un signataire par défaut
+    updateStepperUI();
+    showStepContent();
+    updateNavigationButtons();
+});
+</script>
+
+<style>
+.step-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.step-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #e9ecef;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-bottom: 5px;
+    border: 2px solid #e9ecef;
+}
+
+.step-item.active .step-circle {
+    background-color: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+.step-item.completed .step-circle {
+    background-color: #198754;
+    color: white;
+    border-color: #198754;
+}
+
+.step-line {
+    flex: 1;
+    height: 2px;
+    background-color: #e9ecef;
+    margin: 0 15px;
+    margin-top: 20px;
+}
+
+.step-content {
+    display: none;
+}
+
+.step-content.active {
+    display: block;
+}
+
+.step-label {
+    font-size: 0.75rem;
+    text-align: center;
+}
+
+.signatory-item {
+    border-left: 4px solid #0d6efd;
+}
+</style>
+{% endblock %}

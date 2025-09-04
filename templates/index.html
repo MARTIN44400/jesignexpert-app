@@ -1,953 +1,292 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JeSignExpert ECMA - {{ config.environment|title }}</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+{% extends "base.html" %}
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
-            line-height: 1.6;
-        }
+{% block title %}Accueil - JeSignExpert{% endblock %}
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="bi bi-pen"></i> JeSignExpert - Intégration API
+        </h1>
+    </div>
+</div>
 
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .header h1 {
-            color: #4a5568;
-            font-size: 2.2rem;
-            font-weight: 700;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .env-badge {
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            background: #e2e8f0;
-            color: #4a5568;
-        }
-
-        .env-badge.preprod {
-            background: #fbb6ce;
-            color: #702459;
-        }
-
-        .status-bar {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-top: 15px;
-        }
-
-        .status-item {
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .status-disconnected {
-            background: #fed7d7;
-            color: #c53030;
-        }
-
-        .status-connected {
-            background: #c6f6d5;
-            color: #25543e;
-        }
-
-        .card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .card h2 {
-            color: #2d3748;
-            font-size: 1.6rem;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #4a5568;
-        }
-
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            background: white;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            text-decoration: none;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .btn-secondary {
-            background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
-        }
-
-        .btn-danger {
-            background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #38a169 0%, #25543e 100%);
-        }
-
-        .btn-warning {
-            background: linear-gradient(135deg, #d69e2e 0%, #b7791f 100%);
-        }
-
-        .alert {
-            padding: 15px 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .alert-success {
-            background: #c6f6d5;
-            color: #22543d;
-            border: 1px solid #9ae6b4;
-        }
-
-        .alert-error {
-            background: #fed7d7;
-            color: #c53030;
-            border: 1px solid #feb2b2;
-        }
-
-        .alert-info {
-            background: #bee3f8;
-            color: #2a4365;
-            border: 1px solid #90cdf4;
-        }
-
-        .grid {
-            display: grid;
-            gap: 20px;
-        }
-
-        .grid-2 {
-            grid-template-columns: 1fr 1fr;
-        }
-
-        .grid-3 {
-            grid-template-columns: repeat(3, 1fr);
-        }
-
-        .actions {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            margin-top: 20px;
-        }
-
-        .config-info {
-            background: #f7fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-
-        .config-info h3 {
-            margin-bottom: 10px;
-            color: #2d3748;
-        }
-
-        .config-info code {
-            background: #e2e8f0;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-            color: #2d3748;
-        }
-
-        .transaction-item {
-            background: #f7fafc;
-            border: 1px solid #e2e8f0;
-            border-left: 4px solid #667eea;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-
-        .transaction-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .transaction-title {
-            font-weight: 600;
-            color: #2d3748;
-        }
-
-        .transaction-status {
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        .status-draft { background: #e2e8f0; color: #4a5568; }
-        .status-pending { background: #fed7d7; color: #c53030; }
-        .status-in-progress { background: #fbb6ce; color: #702459; }
-        .status-completed { background: #c6f6d5; color: #22543d; }
-        .status-cancelled { background: #e2e8f0; color: #4a5568; }
-
-        .file-upload {
-            border: 2px dashed #cbd5e0;
-            border-radius: 8px;
-            padding: 30px;
-            text-align: center;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            margin-bottom: 20px;
-        }
-
-        .file-upload:hover {
-            border-color: #667eea;
-            background: #f7fafc;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        @media (max-width: 768px) {
-            .grid-2,
-            .grid-3 {
-                grid-template-columns: 1fr;
-            }
-            
-            .header h1 {
-                font-size: 1.8rem;
-                flex-direction: column;
-                gap: 10px;
-                text-align: center;
-            }
-            
-            .status-bar {
-                justify-content: center;
-            }
-            
-            .actions {
-                justify-content: center;
-            }
-        }
-
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <!-- En-tête -->
-        <div class="header">
-            <h1>
-                🔐 JeSignExpert ECMA
-                <span class="env-badge {{ config.environment }}">{{ config.environment|title }}</span>
-            </h1>
-            
-            <div class="config-info">
-                <h3>Configuration ECMA</h3>
-                <p><strong>Host:</strong> <code>{{ config.base_url }}</code></p>
-                <p><strong>Shortcut:</strong> <code>{{ config.shortcut }}</code></p>
-                <p><strong>Environment:</strong> <code>{{ config.environment }}</code></p>
-                <p><strong>Secret configuré:</strong> 
-                    {% if secret_configured %}
-                        <span style="color: #25543e;">✅ Oui (via .env)</span>
-                    {% else %}
-                        <span style="color: #c53030;">❌ Non</span>
-                    {% endif %}
-                </p>
+<!-- État de la configuration -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-gear"></i> Configuration
+                </h5>
             </div>
-            
-            <div class="status-bar">
-                {% if tokens %}
-                <div class="status-item status-connected">
-                    🟢 Connecté
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <strong>URL ECMA :</strong><br>
+                        <code>{{ config.base_url }}</code>
+                    </div>
+                    <div class="col-sm-6">
+                        <strong>Shortcut :</strong><br>
+                        <code>{{ config.shortcut }}</code>
+                    </div>
                 </div>
-                <div class="status-item">
-                    🏢 {{ tokens.office.name }}
+                <hr>
+                <div class="row">
+                    <div class="col-sm-6">
+                        <strong>Environnement :</strong><br>
+                        <span class="badge bg-info">{{ config.environment }}</span>
+                    </div>
+                    <div class="col-sm-6">
+                        <strong>Secret ECMA :</strong><br>
+                        {% if secret_configured %}
+                            <span class="badge bg-success">Configuré</span>
+                        {% else %}
+                            <span class="badge bg-danger">Non configuré</span>
+                        {% endif %}
+                    </div>
                 </div>
-                <div class="status-item">
-                    👤 {{ tokens.user.firstName }} {{ tokens.user.lastName }}
-                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Actions principales -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightning"></i> Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if not tokens %}
+                    <!-- Authentification -->
+                    <a href="{{ url_for('authenticate') }}" class="btn btn-success btn-lg w-100 mb-2">
+                        <i class="bi bi-box-arrow-in-right"></i> S'authentifier
+                    </a>
+                    <small class="text-muted">Connexion via ComptExpert</small>
                 {% else %}
-                <div class="status-item status-disconnected">
-                    🔴 Non connecté
-                </div>
+                    <!-- Actions authentifiées -->
+                    <button class="btn btn-primary w-100 mb-2" onclick="showCreateTransaction()">
+                        <i class="bi bi-plus-circle"></i> Nouvelle transaction
+                    </button>
+                    <a href="{{ url_for('validate_tokens') }}" class="btn btn-outline-primary w-100 mb-2">
+                        <i class="bi bi-check-circle"></i> Valider tokens
+                    </a>
                 {% endif %}
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- Messages Flash -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                <div class="alert alert-{{ 'error' if category == 'error' else 'success' if category == 'success' else 'info' }}">
-                    {% if category == 'success' %}✅{% elif category == 'error' %}❌{% else %}ℹ️{% endif %}
-                    {{ message }}
-                </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        <!-- Configuration du Secret -->
-        {% if not secret_configured %}
-        <div class="card">
-            <h2>⚙️ Configuration Manquante</h2>
-            <div class="alert alert-error">
-                <strong>❌ Secret ECMA non configuré</strong><br>
-                Veuillez configurer votre secret ECMA dans le fichier <code>.env</code>
+{% if tokens %}
+<!-- Informations de connexion -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-light">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-person-check"></i> Session active
+                </h5>
             </div>
-            
-            <div class="config-info">
-                <h3>Instructions :</h3>
-                <p>1. Éditez le fichier <code>.env</code> dans le dossier de l'application</p>
-                <p>2. Ajoutez la ligne : <code>ECMA_SECRET=votre_secret_ici</code></p>
-                <p>3. Redémarrez l'application avec <code>python app.py</code></p>
-            </div>
-
-            <p><strong>Optionnel :</strong> Vous pouvez aussi le configurer temporairement via ce formulaire :</p>
-            <form action="{{ url_for('configure') }}" method="post">
-                <div class="form-group">
-                    <label for="secret">Secret ECMA (temporaire) :</label>
-                    <input type="password" id="secret" name="secret" required 
-                           placeholder="Saisissez votre secret ECMA">
-                    <small style="color: #718096;">⚠️ Recommandé : utilisez plutôt le fichier .env pour la sécurité</small>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Cabinet :</strong><br>
+                        {{ tokens.office.name }}
+                        {% if tokens.office.token %}
+                            <span class="badge bg-success ms-2">Token valide</span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Utilisateur :</strong><br>
+                        {% if tokens.user and tokens.user.email %}
+                            {{ tokens.user.email }}
+                            {% if tokens.user.token %}
+                                <span class="badge bg-success ms-2">Token valide</span>
+                            {% endif %}
+                        {% else %}
+                            <em class="text-muted">Non défini</em>
+                        {% endif %}
+                    </div>
                 </div>
-                <div class="actions">
-                    <button type="submit" class="btn btn-warning">
-                        🔧 Configurer temporairement
-                    </button>
-                </div>
-            </form>
-        </div>
-        {% endif %}
-
-        <!-- Authentification -->
-        {% if secret_configured and not tokens %}
-        <div class="card">
-            <h2>🔑 Authentification</h2>
-            <div class="config-info">
-                <h3>✅ Configuration prête</h3>
-                <p>Votre secret ECMA est correctement configuré via le fichier <code>.env</code></p>
-            </div>
-            <p>Cliquez sur le bouton ci-dessous pour vous authentifier via ComptExpert.</p>
-            <div class="actions">
-                <a href="{{ url_for('authenticate') }}" class="btn">
-                    🚀 Se connecter via ComptExpert
-                </a>
             </div>
         </div>
-        {% endif %}
+    </div>
+</div>
 
-        <!-- Interface principale (visible seulement si connecté) -->
-        {% if tokens %}
-        <div class="grid grid-2">
-            <!-- Nouvelle Transaction -->
-            <div class="card">
-                <h2>📝 Nouvelle Transaction</h2>
-                <form id="transactionForm">
-                    <div class="form-group">
-                        <label for="transactionName">Nom de la transaction:</label>
-                        <input type="text" id="transactionName" name="name" required
-                               placeholder="Ex: Contrat client ABC">
+<!-- Transactions -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-file-earmark-text"></i> Transactions
+                </h5>
+                <button class="btn btn-primary btn-sm" onclick="showCreateTransaction()">
+                    <i class="bi bi-plus"></i> Nouvelle
+                </button>
+            </div>
+            <div class="card-body">
+                {% if transactions and transactions|length > 0 %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nom</th>
+                                    <th>Type</th>
+                                    <th>Statut</th>
+                                    <th>Créée le</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for transaction in transactions %}
+                                <tr>
+                                    <td><code>{{ transaction.id[:8] }}...</code></td>
+                                    <td>{{ transaction.object or transaction.name or 'Sans nom' }}</td>
+                                    <td>
+                                        <span class="badge bg-info">{{ transaction.type or 'signature' }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-warning">{{ transaction.status or 'draft' }}</span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ transaction.created_at or 'N/A' }}</small>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="viewTransaction('{{ transaction.id }}')">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="transactionType">Type:</label>
-                        <select id="transactionType" name="type">
-                            <option value="signature">Signature électronique</option>
-                            <option value="scellement">Scellement électronique</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="invitationMode">Mode d'invitation:</label>
-                        <select id="invitationMode" name="invitationMode">
-                            <option value="sequential">Séquentiel</option>
-                            <option value="parallel">Parallèle</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="confidential" name="confidential" style="width: auto; margin-right: 10px;">
-                            Transaction confidentielle
-                        </label>
-                    </div>
-
-                    <div class="actions">
-                        <button type="submit" class="btn" id="initBtn">
-                            🚀 Initialiser
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox display-4"></i>
+                        <p class="mt-2">Aucune transaction créée</p>
+                        <button class="btn btn-primary" onclick="showCreateTransaction()">
+                            Créer ma première transaction
                         </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal Création Transaction -->
+<div class="modal fade" id="createTransactionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nouvelle transaction</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createTransactionForm">
+                    <div class="mb-3">
+                        <label for="transactionName" class="form-label">Nom de la transaction</label>
+                        <input type="text" class="form-control" id="transactionName" name="name" required maxlength="45">
+                        <div class="form-text">Maximum 45 caractères</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="transactionMessage" class="form-label">Message</label>
+                        <textarea class="form-control" id="transactionMessage" name="message" rows="3" maxlength="4000"></textarea>
+                        <div class="form-text">Maximum 4000 caractères</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="invitationMode" class="form-label">Mode d'invitation</label>
+                                <select class="form-select" id="invitationMode" name="invitationMode">
+                                    <option value="sequential">Séquentiel</option>
+                                    <option value="parallel">Parallèle</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="locked" name="locked" checked>
+                                <label class="form-check-label" for="locked">
+                                    Verrouiller les documents
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="confidential" name="confidential">
+                                <label class="form-check-label" for="confidential">
+                                    Transaction confidentielle
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </div>
-
-            <!-- Actions rapides -->
-            <div class="card">
-                <h2>⚡ Actions Rapides</h2>
-                
-                <div class="actions">
-                    <button class="btn btn-secondary" onclick="validateTokens()">
-                        ✓ Valider Tokens
-                    </button>
-                    <button class="btn btn-warning" onclick="refreshTransactions()">
-                        🔄 Actualiser
-                    </button>
-                    <a href="{{ url_for('logout') }}" class="btn btn-danger">
-                        🚪 Déconnexion
-                    </a>
-                </div>
-
-                <div class="config-info" style="margin-top: 20px;">
-                    <h3>Informations Utilisateur</h3>
-                    <p><strong>Email:</strong> {{ tokens.user.email }}</p>
-                    <p><strong>Droits:</strong></p>
-                    <ul style="margin-left: 20px;">
-                        {% for right in tokens.user.rights %}
-                        <li>{{ right }}</li>
-                        {% endfor %}
-                    </ul>
-                    <p><strong>Expiration:</strong> {{ tokens.user.expirationDate }}</p>
-                </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="createTransaction()">
+                    <i class="bi bi-plus-circle"></i> Créer
+                </button>
             </div>
         </div>
-
-        <!-- Section Transaction en cours -->
-        <div id="currentTransaction" class="hidden">
-            <div class="card">
-                <h2>📋 Transaction en cours</h2>
-                <div id="transactionInfo"></div>
-                
-                <!-- Signataires -->
-                <div class="grid grid-2" style="margin-top: 20px;">
-                    <div>
-                        <h3>👥 Ajouter un Signataire</h3>
-                        <form id="signatoryForm">
-                            <input type="hidden" id="currentTransactionId">
-                            
-                            <div class="form-group">
-                                <label for="signatoryEmail">Email:</label>
-                                <input type="email" id="signatoryEmail" name="email" required
-                                       placeholder="email@example.com">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="signatoryName">Nom complet:</label>
-                                <input type="text" id="signatoryName" name="name" required
-                                       placeholder="Prénom Nom">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="signatureLevel">Niveau de signature:</label>
-                                <select id="signatureLevel" name="level">
-                                    <option value="1">Niveau 1 - Simple</option>
-                                    <option value="2">Niveau 2 - Avancé</option>
-                                    <option value="3">Niveau 3 - Qualifié QCP</option>
-                                </select>
-                            </div>
-
-                            <div class="actions">
-                                <button type="submit" class="btn">
-                                    ➕ Ajouter Signataire
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-
-                    <!-- Documents -->
-                    <div>
-                        <h3>📄 Ajouter un Document</h3>
-                        <form id="documentForm" enctype="multipart/form-data">
-                            <input type="hidden" id="docTransactionId">
-                            
-                            <div class="file-upload" onclick="document.getElementById('fileInput').click()">
-                                <div style="font-size: 48px; margin-bottom: 10px;">📎</div>
-                                <p><strong>Cliquez pour sélectionner un PDF</strong></p>
-                                <p style="color: #718096; font-size: 0.9rem;">Maximum 100 Mo par fichier</p>
-                            </div>
-                            
-                            <input type="file" id="fileInput" name="file" accept=".pdf" style="display: none;">
-                            
-                            <div class="actions">
-                                <button type="submit" class="btn" disabled id="uploadBtn">
-                                    📤 Envoyer Document
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Actions Transaction -->
-                <div class="actions" style="margin-top: 30px;">
-                    <button class="btn btn-secondary" id="draftBtn">
-                        📋 Envoyer en Brouillon
-                    </button>
-                    <button class="btn btn-success" id="sendBtn">
-                        🚀 Lancer la Collecte
-                    </button>
-                    <button class="btn btn-danger" onclick="cancelCurrentTransaction()">
-                        ❌ Annuler
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Liste des Transactions -->
-        <div class="card">
-            <h2>📊 Mes Transactions</h2>
-            
-            <div id="transactionsList">
-                {% if transactions %}
-                    {% for transaction in transactions %}
-                    <div class="transaction-item">
-                        <div class="transaction-header">
-                            <div class="transaction-title">{{ transaction.name }}</div>
-                            <div class="transaction-status status-{{ transaction.status|default('draft') }}">
-                                {{ transaction.status|default('draft')|title }}
-                            </div>
-                        </div>
-                        <div>
-                            <strong>ID:</strong> {{ transaction.id }}<br>
-                            <strong>Type:</strong> {{ transaction.type|title }}<br>
-                            <strong>Créée:</strong> {{ transaction.createdAt or 'Maintenant' }}
-                        </div>
-                        <div class="actions" style="margin-top: 10px;">
-                            <button class="btn btn-secondary" onclick="getTransactionStatus('{{ transaction.id }}')">
-                                📊 Voir Statut
-                            </button>
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                <p style="text-align: center; color: #718096; margin: 40px 0;">
-                    Aucune transaction trouvée. Créez votre première transaction ci-dessus.
-                </p>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
     </div>
+</div>
 
-    <script>
-        // Variables globales
-        let currentTransactionData = null;
+{% endblock %}
 
-        // Initialisation des événements
-        document.addEventListener('DOMContentLoaded', function() {
-            // Form de création de transaction
-            document.getElementById('transactionForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                initTransaction();
-            });
+{% block extra_scripts %}
+<script>
+function showCreateTransaction() {
+    {% if not tokens %}
+        alert('Vous devez d\'abord vous authentifier pour créer une transaction.');
+        return;
+    {% endif %}
+    
+    const modal = new bootstrap.Modal(document.getElementById('createTransactionModal'));
+    modal.show();
+}
 
-            // Form d'ajout de signataire
-            document.getElementById('signatoryForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                addSignatory();
-            });
-
-            // Form d'ajout de document
-            document.getElementById('documentForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                addDocument();
-            });
-
-            // Gestion du fichier sélectionné
-            document.getElementById('fileInput').addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                const uploadBtn = document.getElementById('uploadBtn');
-                
-                if (file) {
-                    if (file.type !== 'application/pdf') {
-                        showAlert('Veuillez sélectionner un fichier PDF', 'error');
-                        this.value = '';
-                        uploadBtn.disabled = true;
-                        return;
-                    }
-                    
-                    if (file.size > 100 * 1024 * 1024) {
-                        showAlert('Le fichier doit faire moins de 100 Mo', 'error');
-                        this.value = '';
-                        uploadBtn.disabled = true;
-                        return;
-                    }
-                    
-                    uploadBtn.disabled = false;
-                    uploadBtn.innerHTML = `📤 Envoyer "${file.name}"`;
-                } else {
-                    uploadBtn.disabled = true;
-                    uploadBtn.innerHTML = '📤 Envoyer Document';
-                }
-            });
-
-            // Boutons d'actions
-            document.getElementById('draftBtn').addEventListener('click', sendDraft);
-            document.getElementById('sendBtn').addEventListener('click', sendTransaction);
-        });
-
-        // Fonctions utilitaires
-        function showAlert(message, type = 'info') {
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type}`;
-            alertDiv.innerHTML = `
-                ${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}
-                ${message}
-            `;
-            
-            // Insérer en haut du container
-            const container = document.querySelector('.container');
-            container.insertBefore(alertDiv, container.firstChild);
-            
-            // Supprimer après 5 secondes
-            setTimeout(() => {
-                alertDiv.remove();
-            }, 5000);
+function createTransaction() {
+    const form = document.getElementById('createTransactionForm');
+    const formData = new FormData(form);
+    
+    const data = {
+        name: formData.get('name'),
+        message: formData.get('message') || 'Transaction créée depuis l\'interface web',
+        invitationMode: formData.get('invitationMode') || 'sequential',
+        locked: formData.has('locked'),
+        confidential: formData.has('confidential')
+    };
+    
+    fetch('/transaction/init', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('Erreur: ' + data.error);
+        } else {
+            alert('Transaction créée avec succès !');
+            location.reload();
         }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Erreur lors de la création de la transaction');
+    });
+}
 
-        function setLoading(element, loading = true) {
-            if (loading) {
-                element.disabled = true;
-                element.innerHTML = element.innerHTML.replace(/^[^>]*>/, '') + ' <span class="loading"></span>';
-            } else {
-                element.disabled = false;
-                element.querySelector('.loading')?.remove();
-            }
-        }
-
-        // API Functions
-        async function makeRequest(url, options = {}) {
-            try {
-                const response = await fetch(url, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...options.headers
-                    },
-                    ...options
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
-                    throw new Error(errorData.error || `HTTP ${response.status}`);
-                }
-
-                return await response.json();
-            } catch (error) {
-                console.error('Erreur API:', error);
-                throw error;
-            }
-        }
-
-        // Validation des tokens
-        async function validateTokens() {
-            try {
-                const result = await makeRequest('/validate-tokens');
-                showAlert('Tokens validés avec succès', 'success');
-                console.log('Validation result:', result);
-            } catch (error) {
-                showAlert(`Erreur de validation: ${error.message}`, 'error');
-            }
-        }
-
-        // Initialisation de transaction
-        async function initTransaction() {
-            const btn = document.getElementById('initBtn');
-            setLoading(btn);
-
-            try {
-                const formData = new FormData(document.getElementById('transactionForm'));
-                const data = Object.fromEntries(formData.entries());
-                data.confidential = document.getElementById('confidential').checked;
-
-                const result = await makeRequest('/transaction/init', {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-
-                currentTransactionData = result;
-                
-                // Mettre à jour l'interface
-                document.getElementById('currentTransaction').classList.remove('hidden');
-                document.getElementById('currentTransactionId').value = result.id;
-                document.getElementById('docTransactionId').value = result.id;
-                
-                document.getElementById('transactionInfo').innerHTML = `
-                    <div class="config-info">
-                        <h3>Transaction: ${result.name}</h3>
-                        <p><strong>ID:</strong> <code>${result.id}</code></p>
-                        <p><strong>Type:</strong> ${result.type}</p>
-                        <p><strong>Statut:</strong> ${result.status || 'draft'}</p>
-                    </div>
-                `;
-
-                showAlert(`Transaction "${result.name}" créée avec succès!`, 'success');
-                
-                // Reset du formulaire
-                document.getElementById('transactionForm').reset();
-
-            } catch (error) {
-                showAlert(`Erreur: ${error.message}`, 'error');
-            } finally {
-                setLoading(btn, false);
-            }
-        }
-
-        // Ajout de signataire
-        async function addSignatory() {
-            const transactionId = document.getElementById('currentTransactionId').value;
-            if (!transactionId) return;
-
-            try {
-                const formData = new FormData(document.getElementById('signatoryForm'));
-                const data = Object.fromEntries(formData.entries());
-
-                const result = await makeRequest(`/transaction/${transactionId}/signatory`, {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-
-                showAlert(`Signataire ${data.name} ajouté avec succès`, 'success');
-                document.getElementById('signatoryForm').reset();
-
-            } catch (error) {
-                showAlert(`Erreur: ${error.message}`, 'error');
-            }
-        }
-
-        // Ajout de document
-        async function addDocument() {
-            const transactionId = document.getElementById('docTransactionId').value;
-            if (!transactionId) return;
-
-            const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0];
-            
-            if (!file) {
-                showAlert('Veuillez sélectionner un fichier', 'error');
-                return;
-            }
-
-            const btn = document.getElementById('uploadBtn');
-            setLoading(btn);
-
-            try {
-                const formData = new FormData();
-                formData.append('file', file);
-
-                const result = await fetch(`/transaction/${transactionId}/document`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!result.ok) {
-                    throw new Error(`HTTP ${result.status}`);
-                }
-
-                showAlert(`Document "${file.name}" ajouté avec succès`, 'success');
-                fileInput.value = '';
-                btn.disabled = true;
-                btn.innerHTML = '📤 Envoyer Document';
-
-            } catch (error) {
-                showAlert(`Erreur: ${error.message}`, 'error');
-            } finally {
-                setLoading(btn, false);
-            }
-        }
-
-        // Envoi en brouillon
-        async function sendDraft() {
-            if (!currentTransactionData) return;
-
-            const btn = document.getElementById('draftBtn');
-            setLoading(btn);
-
-            try {
-                await makeRequest(`/transaction/${currentTransactionData.id}/draft`, {
-                    method: 'POST'
-                });
-
-                showAlert('Transaction envoyée en brouillon', 'success');
-
-            } catch (error) {
-                showAlert(`Erreur: ${error.message}`, 'error');
-            } finally {
-                setLoading(btn, false);
-            }
-        }
-
-        // Lancement de la collecte
-        async function sendTransaction() {
-            if (!currentTransactionData) return;
-            
-            if (!confirm('Êtes-vous sûr de vouloir lancer la collecte de signatures ?')) {
-                return;
-            }
-
-            const btn = document.getElementById('sendBtn');
-            setLoading(btn);
-
-            try {
-                await makeRequest(`/transaction/${currentTransactionData.id}/send`, {
-                    method: 'POST'
-                });
-
-                showAlert('Collecte de signatures lancée!', 'success');
-                
-                // Actualiser la liste
-                setTimeout(refreshTransactions, 2000);
-
-            } catch (error) {
-                showAlert(`Erreur: ${error.message}`, 'error');
-            } finally {
-                setLoading(btn, false);
-            }
-        }
-
-        // Statut d'une transaction
-        async function getTransactionStatus(transactionId) {
-            try {
-                const result = await makeRequest(`/transaction/${transactionId}/status`);
-                
-                showAlert(`Statut: ${result.status}`, 'info');
-                console.log('Transaction status:', result);
-
-            } catch (error) {
-                showAlert(`Erreur: ${error.message}`, 'error');
-            }
-        }
-
-        // Actualisation des transactions
-        async function refreshTransactions() {
-            try {
-                showAlert('Actualisation en cours...', 'info');
-                
-                const result = await makeRequest('/transactions/refresh');
-                
-                // Recharger la page pour voir les mises à jour
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
-
-            } catch (error) {
-                showAlert(`Erreur: ${error.message}`, 'error');
-            }
-        }
-
-        // Annuler transaction courante
-        function cancelCurrentTransaction() {
-            if (confirm('Êtes-vous sûr de vouloir annuler cette transaction ?')) {
-                currentTransactionData = null;
-                document.getElementById('currentTransaction').classList.add('hidden');
-                document.getElementById('transactionForm').reset();
-                showAlert('Transaction annulée', 'info');
-            }
-        }
-    </script>
-</body>
-</html>
+function viewTransaction(id) {
+    alert('Fonctionnalité de visualisation à implémenter pour la transaction: ' + id);
+}
+</script>
+{% endblock %}
