@@ -6,7 +6,7 @@
 <div class="row">
     <div class="col-12">
         <h1 class="mb-4">
-            <i class="bi bi-pen"></i> JeSignExpert - Intégration API
+            <i class="bi bi-pen"></i> JeSignExpert - Signature Électronique
         </h1>
     </div>
 </div>
@@ -61,21 +61,26 @@
             <div class="card-body">
                 {% if not tokens %}
                     <!-- Authentification -->
-                    <a href="{{ url_for('authenticate') }}" class="btn btn-success btn-lg w-100 mb-2">
-                        <i class="bi bi-box-arrow-in-right"></i> S'authentifier
-                    </a>
-                    <small class="text-muted">Connexion via ComptExpert</small>
+                    <div class="text-center">
+                        <i class="bi bi-shield-lock display-4 text-muted mb-3"></i>
+                        <h6 class="text-muted mb-3">Connexion requise</h6>
+                        <a href="{{ url_for('authenticate') }}" class="btn btn-success btn-lg w-100">
+                            <i class="bi bi-box-arrow-in-right"></i> S'authentifier
+                        </a>
+                        <small class="text-muted d-block mt-2">Connexion via ComptExpert</small>
+                    </div>
                 {% else %}
-                    <!-- Actions authentifiées -->
-                    <a href="{{ url_for('send_document_page') }}" class="btn btn-success w-100 mb-2">
-                        <i class="bi bi-send-fill"></i> Envoyer un document
-                    </a>
-                    <button class="btn btn-primary w-100 mb-2" onclick="showCreateTransaction()">
-                        <i class="bi bi-plus-circle"></i> Nouvelle transaction
-                    </button>
-                    <a href="{{ url_for('validate_tokens') }}" class="btn btn-outline-primary w-100 mb-2">
-                        <i class="bi bi-check-circle"></i> Valider tokens
-                    </a>
+                    <!-- Action principale : Envoi de document -->
+                    <div class="text-center">
+                        <i class="bi bi-send-fill display-4 text-primary mb-3"></i>
+                        <h6 class="mb-3">Prêt à envoyer des documents</h6>
+                        <a href="{{ url_for('send_document_page') }}" class="btn btn-success btn-lg w-100 mb-3">
+                            <i class="bi bi-send-fill"></i> Envoyer un document
+                        </a>
+                        <a href="{{ url_for('validate_tokens') }}" class="btn btn-outline-secondary w-100">
+                            <i class="bi bi-check-circle"></i> Vérifier la connexion
+                        </a>
+                    </div>
                 {% endif %}
             </div>
         </div>
@@ -118,178 +123,93 @@
     </div>
 </div>
 
-<!-- Transactions -->
+<!-- Fonctionnalités disponibles -->
 <div class="row">
     <div class="col-12">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="bi bi-file-earmark-text"></i> Transactions
+                    <i class="bi bi-list-check"></i> Workflow d'envoi de documents
                 </h5>
-                <button class="btn btn-primary btn-sm" onclick="showCreateTransaction()">
-                    <i class="bi bi-plus"></i> Nouvelle
-                </button>
             </div>
             <div class="card-body">
-                {% if transactions and transactions|length > 0 %}
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Nom</th>
-                                    <th>Type</th>
-                                    <th>Statut</th>
-                                    <th>Créée le</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for transaction in transactions %}
-                                <tr>
-                                    <td><code>{{ transaction.id[:8] }}...</code></td>
-                                    <td>{{ transaction.object or transaction.name or 'Sans nom' }}</td>
-                                    <td>
-                                        <span class="badge bg-info">{{ transaction.type or 'signature' }}</span>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-warning">{{ transaction.status or 'draft' }}</span>
-                                    </td>
-                                    <td>
-                                        <small class="text-muted">{{ transaction.created_at or 'N/A' }}</small>
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-primary" onclick="viewTransaction('{{ transaction.id }}')">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                <div class="row">
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 60px; height: 60px;">
+                            <i class="bi bi-info-circle text-primary fs-4"></i>
+                        </div>
+                        <h6>1. Informations</h6>
+                        <small class="text-muted">Objet, message et mode de signature</small>
                     </div>
-                {% else %}
-                    <div class="text-center text-muted py-4">
-                        <i class="bi bi-inbox display-4"></i>
-                        <p class="mt-2">Aucune transaction créée</p>
-                        <button class="btn btn-primary" onclick="showCreateTransaction()">
-                            Créer ma première transaction
-                        </button>
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="bg-success bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 60px; height: 60px;">
+                            <i class="bi bi-file-earmark-pdf text-success fs-4"></i>
+                        </div>
+                        <h6>2. Document PDF</h6>
+                        <small class="text-muted">Upload du fichier à signer</small>
                     </div>
-                {% endif %}
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="bg-warning bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 60px; height: 60px;">
+                            <i class="bi bi-people text-warning fs-4"></i>
+                        </div>
+                        <h6>3. Signataires</h6>
+                        <small class="text-muted">Ajout des personnes à faire signer</small>
+                    </div>
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="bg-info bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 60px; height: 60px;">
+                            <i class="bi bi-send text-info fs-4"></i>
+                        </div>
+                        <h6>4. Envoi</h6>
+                        <small class="text-muted">Finalisation et envoi des invitations</small>
+                    </div>
+                </div>
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('send_document_page') }}" class="btn btn-primary">
+                        <i class="bi bi-arrow-right"></i> Commencer l'envoi d'un document
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- Informations pour les utilisateurs non connectés -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle"></i> À propos de JeSignExpert
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-shield-check text-success"></i> Signature électronique sécurisée</h6>
+                        <p class="text-muted">Envoyez vos documents pour signature électronique avec une sécurité maximale et une validité juridique.</p>
+                        
+                        <h6><i class="bi bi-clock text-primary"></i> Gain de temps</h6>
+                        <p class="text-muted">Finies les impressions, signatures manuscrites et envois postaux. Tout se fait en ligne rapidement.</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-people text-warning"></i> Workflow simple</h6>
+                        <p class="text-muted">Ajoutez plusieurs signataires, définissez l'ordre de signature et suivez l'avancement en temps réel.</p>
+                        
+                        <h6><i class="bi bi-check2-all text-info"></i> Traçabilité complète</h6>
+                        <p class="text-muted">Chaque signature est horodatée et traçable pour une sécurité juridique optimale.</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 {% endif %}
 
-<!-- Modal Création Transaction -->
-<div class="modal fade" id="createTransactionModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Nouvelle transaction</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="createTransactionForm">
-                    <div class="mb-3">
-                        <label for="transactionName" class="form-label">Nom de la transaction</label>
-                        <input type="text" class="form-control" id="transactionName" name="name" required maxlength="45">
-                        <div class="form-text">Maximum 45 caractères</div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="transactionMessage" class="form-label">Message</label>
-                        <textarea class="form-control" id="transactionMessage" name="message" rows="3" maxlength="4000"></textarea>
-                        <div class="form-text">Maximum 4000 caractères</div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="invitationMode" class="form-label">Mode d'invitation</label>
-                                <select class="form-select" id="invitationMode" name="invitationMode">
-                                    <option value="sequential">Séquentiel</option>
-                                    <option value="parallel">Parallèle</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-check mt-4">
-                                <input class="form-check-input" type="checkbox" id="locked" name="locked" checked>
-                                <label class="form-check-label" for="locked">
-                                    Verrouiller les documents
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="confidential" name="confidential">
-                                <label class="form-check-label" for="confidential">
-                                    Transaction confidentielle
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-                <button type="button" class="btn btn-primary" onclick="createTransaction()">
-                    <i class="bi bi-plus-circle"></i> Créer
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-function showCreateTransaction() {
-    {% if not tokens %}
-        alert('Vous devez d\'abord vous authentifier pour créer une transaction.');
-        return;
-    {% endif %}
-    
-    const modal = new bootstrap.Modal(document.getElementById('createTransactionModal'));
-    modal.show();
-}
-
-function createTransaction() {
-    const form = document.getElementById('createTransactionForm');
-    const formData = new FormData(form);
-    
-    const data = {
-        name: formData.get('name'),
-        message: formData.get('message') || 'Transaction créée depuis l\'interface web',
-        invitationMode: formData.get('invitationMode') || 'sequential',
-        locked: formData.has('locked'),
-        confidential: formData.has('confidential')
-    };
-    
-    fetch('/transaction/init', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            alert('Erreur: ' + data.error);
-        } else {
-            alert('Transaction créée avec succès !');
-            location.reload();
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Erreur lors de la création de la transaction');
-    });
-}
-
-function viewTransaction(id) {
-    alert('Fonctionnalité de visualisation à implémenter pour la transaction: ' + id);
-}
+// Supprimer les scripts de création de transaction
+// Garder seulement les fonctions utiles si nécessaire
 </script>
 {% endblock %}
