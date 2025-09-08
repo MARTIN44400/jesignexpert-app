@@ -51,58 +51,47 @@ class EcmaClient:
         import random, string
         return ''.join(random.choices(string.ascii_letters + string.digits, k=30))
 
-    def create_auth_url(self):
-        id_request = self.generate_id_request()
-        timestamp = self.get_timestamp()
-        hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"
-        hmac_sig = self.generate_hmac(hmac_data)
-        
-        # Stocker dans session avec un nom unique
-        session_key = f"auth_{id_request}"
-        session[session_key] = {
-            'id_request': id_request,
-            'timestamp': timestamp,
-            'hmac': hmac_sig
-        }
-        session['current_auth_key'] = session_key
-        
-        url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/{id_request}/{hmac_sig}?ts={timestamp}"
-        
-        payload = {
-            'success_url': "https://jesignexpert-app.onrender.com/callback",
-            'generate_hmac': True
-        }
-        
-        try:
-            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
-            if response.ok:
-                auth_data = response.json()
-                return auth_data.get('url', url)
-            else:
-                raise Exception(f"Erreur ECMA: {response.status_code}")
-        except Exception as e:
-            logger.error(f"Erreur auth: {e}")
-            raise
+# Remplacez ces deux méthodes dans votre classe EcmaClient
 
-    def fetch_tokens(self):
-        current_key = session.get('current_auth_key')
-        if not current_key or current_key not in session:
-            raise Exception("Session expirée")
-        
-        auth_data = session[current_key]
-        url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/fetch/{auth_data['id_request']}/{auth_data['hmac']}?ts={auth_data['timestamp']}"
-        
-        response = requests.get(url)
+def create_auth_url(self):
+    id_request = self.generate_id_request()
+    timestamp = self.get_timestamp()
+    hmac_data = f"{self.shortcut}||{id_request}||{timestamp}"
+    hmac_sig = self.generate_hmac(hmac_data)
+    
+    # NE PAS stocker en session - utiliser l'URL directement
+    url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/auth/{id_request}/{hmac_sig}?ts={timestamp}"
+    
+    # Passer les paramètres dans l'URL de callback
+    callback_url = f"https://jesignexpert-app.onrender.com/callback?id_request={id_request}&timestamp={timestamp}&hmac_sig={hmac_sig}"
+    
+    payload = {
+        'success_url': callback_url,
+        'generate_hmac': True
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
         if response.ok:
-            tokens = response.json()
-            session['tokens'] = tokens
-            # Nettoyer les données d'auth
-            session.pop(current_key, None)
-            session.pop('current_auth_key', None)
-            return tokens
+            auth_data = response.json()
+            return auth_data.get('url', url)
         else:
-            raise Exception(f"Erreur fetch tokens: {response.status_code}")
+            raise Exception(f"Erreur ECMA: {response.status_code}")
+    except Exception as e:
+        logger.error(f"Erreur auth: {e}")
+        raise
 
+def fetch_tokens(self, id_request, timestamp, hmac_sig):
+    """Récupérer les tokens avec les paramètres passés en URL"""
+    url = f"{self.base_url}/editor/{self.shortcut}/token/officeAndUser/fetch/{id_request}/{hmac_sig}?ts={timestamp}"
+    
+    response = requests.get(url)
+    if response.ok:
+        tokens = response.json()
+        session['tokens'] = tokens  # Stocker seulement les tokens finaux
+        return tokens
+    else:
+        raise Exception(f"Erreur fetch tokens: {response.status_code} - {response.text}")
     def api_call(self, endpoint, method='POST', data=None, files=None):
         if 'tokens' not in session:
             raise Exception("Non authentifié")
@@ -144,12 +133,18 @@ def auth():
 @app.route('/callback')
 def callback():
     logger.info(f"=== CALLBACK DEBUG ===")
-    logger.info(f"Session keys: {list(session.keys())}")
-    logger.info(f"Current auth key: {session.get('current_auth_key')}")
     logger.info(f"Query params: {request.args}")
     
     try:
-        tokens = ecma.fetch_tokens()
+        # Récupérer les paramètres depuis l'URL au lieu de la session
+        id_request = request.args.get('id_request')
+        timestamp = request.args.get('timestamp')
+        hmac_sig = request.args.get('hmac_sig')
+        
+        if not all([id_request, timestamp, hmac_sig]):
+            raise Exception("Paramètres manquants dans le callback")
+        
+        tokens = ecma.fetch_tokens(id_request, timestamp, hmac_sig)
         office_name = tokens.get('office', {}).get('name', 'Cabinet')
         flash(f'Connecté ! Cabinet: {office_name}', 'success')
         logger.info(f"Tokens stockés: {tokens.get('office', {}).get('name')}")
