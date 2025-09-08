@@ -332,7 +332,10 @@ def auth_callback():
         
         office_name = tokens.get('office', {}).get('name', 'Cabinet inconnu')
         flash(f'Connexion réussie ! Cabinet: {office_name}', 'success')
-        return redirect(url_for('index'))
+        
+        # Rediriger vers la page demandée ou l'accueil
+        next_url = session.pop('next_url', url_for('index'))
+        return redirect(next_url)
         
     except Exception as e:
         logger.error(f"Erreur récupération tokens: {e}")
@@ -352,10 +355,13 @@ def send_document_page():
         return redirect(url_for('index'))
     
     if 'tokens' not in session:
-        flash('Veuillez vous authentifier', 'error') 
+        # Stocker l'URL de destination en session
+        session['next_url'] = url_for('send_document_page')
+        flash('Veuillez vous authentifier pour accéder à l\'envoi de documents', 'info')
         return redirect(url_for('authenticate'))
     
     return render_template('send_document.html')
+
 
 @app.route('/send-document-workflow', methods=['POST'])
 def send_document_workflow():
