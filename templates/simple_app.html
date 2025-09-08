@@ -466,4 +466,17 @@
             const file = e.target.files[0];
             if (file) {
                 document.getElementById('fileName').textContent = file.name;
-                document.getElementById('fileSize').textContent
+                document.getElementById('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' Mo';
+                document.getElementById('fileInfo').classList.remove('hidden');
+            } else {
+                document.getElementById('fileInfo').classList.add('hidden');
+            }
+        });
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            addSignatory(); // Ajouter un signataire par défaut
+        });
+    </script>
+</body>
+</html>
