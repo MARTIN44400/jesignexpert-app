@@ -920,6 +920,20 @@ def logout():
     flash('Déconnexion réussie', 'info')
     return redirect(url_for('index'))
 
+@app.route('/send-document')
+def send_document_page():
+    """Page d'envoi de document"""
+    if not ecma_client:
+        flash('Veuillez d\'abord configurer le secret ECMA', 'error')
+        return redirect(url_for('index'))
+    
+    if 'tokens' not in session:
+        flash('Veuillez vous authentifier', 'error') 
+        return redirect(url_for('authenticate'))
+    
+    return render_template('send_document.html')
+
+
 @app.errorhandler(404)
 def not_found_error(error):
     return '''
@@ -951,15 +965,3 @@ if __name__ == '__main__':
     
     app.run(host=host, port=port, debug=debug)
 
-@app.route('/send-document')
-def send_document_page():
-    """Page d'envoi de document"""
-    if not ecma_client:
-        flash('Veuillez d\'abord configurer le secret ECMA', 'error')
-        return redirect(url_for('index'))
-    
-    if 'tokens' not in session:
-        flash('Veuillez vous authentifier', 'error') 
-        return redirect(url_for('authenticate'))
-    
-    return render_template('send_document.html')
