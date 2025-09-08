@@ -143,12 +143,19 @@ def auth():
 
 @app.route('/callback')
 def callback():
+    logger.info(f"=== CALLBACK DEBUG ===")
+    logger.info(f"Session keys: {list(session.keys())}")
+    logger.info(f"Current auth key: {session.get('current_auth_key')}")
+    logger.info(f"Query params: {request.args}")
+    
     try:
         tokens = ecma.fetch_tokens()
         office_name = tokens.get('office', {}).get('name', 'Cabinet')
         flash(f'Connecté ! Cabinet: {office_name}', 'success')
+        logger.info(f"Tokens stockés: {tokens.get('office', {}).get('name')}")
         return redirect(url_for('index'))
     except Exception as e:
+        logger.error(f'Erreur callback: {e}')
         flash(f'Erreur callback: {e}', 'error')
         return redirect(url_for('index'))
 
