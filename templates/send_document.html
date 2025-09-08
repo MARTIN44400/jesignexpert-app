@@ -524,22 +524,28 @@ function hideProgress() {
     if (modal) modal.hide();
 }
 
-// Gestion du fichier
-document.getElementById('documentFile').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    const preview = document.getElementById('filePreview');
-    
-    if (file) {
-        document.getElementById('fileName').textContent = file.name;
-        document.getElementById('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' Mo';
-        preview.classList.remove('d-none');
-    } else {
-        preview.classList.add('d-none');
-    }
-});
-
-// Initialisation
+// Initialisation sécurisée avec vérification des éléments
 document.addEventListener('DOMContentLoaded', function() {
+    // Vérifier que tous les éléments existent avant d'ajouter les événements
+    const documentFileInput = document.getElementById('documentFile');
+    if (documentFileInput) {
+        documentFileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const preview = document.getElementById('filePreview');
+            const fileName = document.getElementById('fileName');
+            const fileSize = document.getElementById('fileSize');
+            
+            if (file && preview && fileName && fileSize) {
+                fileName.textContent = file.name;
+                fileSize.textContent = (file.size / 1024 / 1024).toFixed(2) + ' Mo';
+                preview.classList.remove('d-none');
+            } else if (preview) {
+                preview.classList.add('d-none');
+            }
+        });
+    }
+    
+    // Initialiser l'interface
     addSignatory(); // Ajouter un signataire par défaut
     updateStepperUI();
     showStepContent();
