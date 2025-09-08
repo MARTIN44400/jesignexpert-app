@@ -933,6 +933,14 @@ def send_document_page():
     
     return render_template('send_document.html')
 
+@app.route('/debug-session')
+def debug_session():
+    return jsonify({
+        'session_keys': list(session.keys()),
+        'has_tokens': 'tokens' in session,
+        'tokens': session.get('tokens', 'None')
+    })
+
 
 @app.errorhandler(404)
 def not_found_error(error):
